@@ -244,9 +244,10 @@ patch_super_tart_vm() {
 	fi
 
 	log "patching super-tart VM.swift for vphone (VPHONE_MODE)..."
-	TARGET="${target}" python3 - <<'PY'
+    TARGET="${target}" python3 - <<'PY'
 from pathlib import Path
 import os
+import re
 import sys
 import textwrap
 
@@ -289,16 +290,10 @@ insert_helpers = needle_class + textwrap.dedent("""\
 """)
 data = data.replace(needle_class, insert_helpers)
 
-needle_platform = textwrap.dedent("""\
-    // Platform
-    configuration.platform = try vmConfig.platform.platform(nvramURL: nvramURL, needsNestedVirtualization: nested)
-
-    // Display
-    configuration.graphicsDevices = [vmConfig.platform.graphicsDevice(vmConfig: vmConfig)]
-""")
-if needle_platform not in data:
-    raise SystemExit("patch failed: platform/display block not found")
-
+platform_pattern = re.compile(
+    r"(\\s*// Platform\\s*\\n\\s*configuration\\.platform\\s*=.*?\\n\\s*// Display\\s*\\n\\s*configuration\\.graphicsDevices\\s*=.*?\\n)",
+    re.DOTALL,
+)
 replace_platform = textwrap.dedent("""\
     let vphoneMode = Self.vphoneEnabled()
 
@@ -338,21 +333,14 @@ replace_platform = textwrap.dedent("""\
       configuration.graphicsDevices = [vmConfig.platform.graphicsDevice(vmConfig: vmConfig)]
     }
 """)
-data = data.replace(needle_platform, replace_platform)
+data, count = platform_pattern.subn(replace_platform, data, count=1)
+if count == 0:
+    raise SystemExit("patch failed: platform/display block not found")
 
-needle_kb = textwrap.dedent("""\
-    // Keyboard and mouse
-    if suspendable, let platformSuspendable = vmConfig.platform.self as? PlatformSuspendable {
-      configuration.keyboards = platformSuspendable.keyboardsSuspendable()
-      configuration.pointingDevices = platformSuspendable.pointingDevicesSuspendable()
-    } else {
-      configuration.keyboards = vmConfig.platform.keyboards()
-      configuration.pointingDevices = vmConfig.platform.pointingDevices()
-    }
-""")
-if needle_kb not in data:
-    raise SystemExit("patch failed: keyboard/mouse block not found")
-
+kb_pattern = re.compile(
+    r"(\\s*// Keyboard and mouse\\s*\\n\\s*if\\s*suspendable,\\s*let\\s*platformSuspendable.*?\\n\\s*}\\s*else\\s*\\{\\s*\\n\\s*configuration\\.keyboards\\s*=.*?\\n\\s*configuration\\.pointingDevices\\s*=.*?\\n\\s*}\\s*\\n)",
+    re.DOTALL,
+)
 replace_kb = textwrap.dedent("""\
     // Keyboard and mouse
     if vphoneMode {
@@ -374,7 +362,9 @@ replace_kb = textwrap.dedent("""\
       configuration.pointingDevices = vmConfig.platform.pointingDevices()
     }
 """)
-data = data.replace(needle_kb, replace_kb)
+data, count = kb_pattern.subn(replace_kb, data, count=1)
+if count == 0:
+    raise SystemExit("patch failed: keyboard/mouse block not found")
 
 path.write_text(data)
 print("  ✓ VM.swift patched")
