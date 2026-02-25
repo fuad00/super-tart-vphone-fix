@@ -58,8 +58,11 @@ void VPhoneConfigureStartOptions(VZMacOSVirtualMachineStartOptions *opts,
                                   BOOL stopOnPanic,
                                   BOOL stopOnFatalError) {
   [opts _setForceDFU:YES];
-  [opts _setPanicAction:stopOnPanic];
-  [opts _setFatalErrorAction:stopOnFatalError];
+  [opts _setStopInIBootStage1:NO];
+  [opts _setStopInIBootStage2:NO];
+  // Note: _setPanicAction: / _setFatalErrorAction: don't exist on
+  // VZMacOSVirtualMachineStartOptions. Panic handling is done via
+  // _VZPvPanicDeviceConfiguration set on VZVirtualMachineConfiguration.
 }
 
 void VPhoneSetGDBDebugStub(VZVirtualMachineConfiguration *config, NSInteger port) {
