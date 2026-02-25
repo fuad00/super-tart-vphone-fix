@@ -3,9 +3,9 @@
 # Usage: source setup_env.sh
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    echo "error: this script must be sourced, not executed."
-    echo "usage: source setup_env.sh"
-    exit 1
+	echo "error: this script must be sourced, not executed."
+	echo "usage: source setup_env.sh"
+	exit 1
 fi
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -14,13 +14,13 @@ VENV_DIR="${REPO_ROOT}/.venv"
 
 # --- Python virtual environment ---
 if [ ! -d "${VENV_DIR}" ]; then
-    echo "venv not found — creating with system python3..."
-    python3 -m venv "${VENV_DIR}"
-    source "${VENV_DIR}/bin/activate"
-    pip install --quiet --upgrade pip
-    pip install --quiet -r "${REPO_ROOT}/requirements.txt"
+	echo "venv not found — creating with system python3..."
+	python3 -m venv "${VENV_DIR}"
+	source "${VENV_DIR}/bin/activate"
+	pip install --quiet --upgrade pip
+	pip install --quiet -r "${REPO_ROOT}/requirements.txt"
 else
-    source "${VENV_DIR}/bin/activate"
+	source "${VENV_DIR}/bin/activate"
 fi
 
 # --- PATH ---

@@ -44,70 +44,73 @@ PATCHED_DIR="${FW_DIR}/firmware_patched/${IPHONE_RESTORE_DIR}"
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
-log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
-ok()   { printf '\033[1;32m  ✓\033[0m %s\n' "$*"; }
+log() { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
+ok() { printf '\033[1;32m  ✓\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m  !\033[0m %s\n' "$*"; }
-err()  { printf '\033[1;31m  ✗\033[0m %s\n' "$*" >&2; }
-die()  { err "$@"; exit 1; }
+err() { printf '\033[1;31m  ✗\033[0m %s\n' "$*" >&2; }
+die() {
+	err "$@"
+	exit 1
+}
 
 # ── download iPhone IPSW ─────────────────────────────────────────────────────
 
 download_iphone_ipsw() {
-    log "downloading iPhone17,3 iOS 26.1 (23B85) IPSW..."
+	log "downloading iPhone17,3 iOS 26.1 (23B85) IPSW..."
 
-    if [ -f "${FW_DIR}/${IPHONE_IPSW_NAME}" ]; then
-        ok "already exists: ${FW_DIR}/${IPHONE_IPSW_NAME}"
-        return 0
-    fi
+	if [ -f "${FW_DIR}/${IPHONE_IPSW_NAME}" ]; then
+		ok "already exists: ${FW_DIR}/${IPHONE_IPSW_NAME}"
+		return 0
+	fi
 
-    mkdir -p "${FW_DIR}"
-    curl -L -o "${FW_DIR}/${IPHONE_IPSW_NAME}.part" "${IPHONE_IPSW_URL}"
-    mv "${FW_DIR}/${IPHONE_IPSW_NAME}.part" "${FW_DIR}/${IPHONE_IPSW_NAME}"
-    ok "downloaded: ${FW_DIR}/${IPHONE_IPSW_NAME}"
+	mkdir -p "${FW_DIR}"
+	curl -L -o "${FW_DIR}/${IPHONE_IPSW_NAME}.part" "${IPHONE_IPSW_URL}"
+	mv "${FW_DIR}/${IPHONE_IPSW_NAME}.part" "${FW_DIR}/${IPHONE_IPSW_NAME}"
+	ok "downloaded: ${FW_DIR}/${IPHONE_IPSW_NAME}"
 }
 
 # ── download PCC firmware ─────────────────────────────────────────────────────
 
 download_pcc_ipsw() {
-    log "downloading PCC cloudOS 23B85 IPSW..."
+	log "downloading PCC cloudOS 23B85 IPSW..."
 
-    if [ -f "${FW_DIR}/${PCC_IPSW_NAME}" ]; then
-        ok "already exists: ${FW_DIR}/${PCC_IPSW_NAME}"
-        return 0
-    fi
+	if [ -f "${FW_DIR}/${PCC_IPSW_NAME}" ]; then
+		ok "already exists: ${FW_DIR}/${PCC_IPSW_NAME}"
+		return 0
+	fi
 
-    mkdir -p "${FW_DIR}"
-    curl -L -o "${FW_DIR}/${PCC_IPSW_NAME}.part" "${PCC_IPSW_URL}"
-    mv "${FW_DIR}/${PCC_IPSW_NAME}.part" "${FW_DIR}/${PCC_IPSW_NAME}"
-    ok "downloaded: ${FW_DIR}/${PCC_IPSW_NAME}"
+	mkdir -p "${FW_DIR}"
+	curl -L -o "${FW_DIR}/${PCC_IPSW_NAME}.part" "${PCC_IPSW_URL}"
+	mv "${FW_DIR}/${PCC_IPSW_NAME}.part" "${FW_DIR}/${PCC_IPSW_NAME}"
+	ok "downloaded: ${FW_DIR}/${PCC_IPSW_NAME}"
 }
 
 # ── extract IPSWs ────────────────────────────────────────────────────────────
 
 extract_iphone_ipsw() {
-    log "extracting iPhone IPSW..."
+	log "extracting iPhone IPSW..."
 
-    if [ -d "${PATCHED_DIR}" ]; then
-        ok "restore directory already exists: ${PATCHED_DIR}"
-        return 0
-    fi
+	if [ -d "${PATCHED_DIR}" ]; then
+		ok "restore directory already exists: ${PATCHED_DIR}"
+		return 0
+	fi
 
-    mkdir -p "${PATCHED_DIR}"
-    unzip -o "${FW_DIR}/${IPHONE_IPSW_NAME}" -d "${PATCHED_DIR}"
-    ok "extracted to: ${PATCHED_DIR}"
+	mkdir -p "${PATCHED_DIR}"
+	unzip -o "${FW_DIR}/${IPHONE_IPSW_NAME}" -d "${PATCHED_DIR}"
+	ok "extracted to: ${PATCHED_DIR}"
 }
 
 extract_pcc_ipsw() {
-    log "extracting PCC IPSW..."
+	log "extracting PCC IPSW..."
 
-    if [ -d "${FW_DIR}/${PCC_EXTRACT_DIR}" ]; then
-        ok "PCC extract directory already exists: ${FW_DIR}/${PCC_EXTRACT_DIR}"
-        return 0
-    fi
+	if [ -d "${FW_DIR}/${PCC_EXTRACT_DIR}" ]; then
+		ok "PCC extract directory already exists: ${FW_DIR}/${PCC_EXTRACT_DIR}"
+		return 0
+	fi
 
-    mkdir -p "${FW_DIR}/${PCC_EXTRACT_DIR}"
-    unzip -o "${FW_DIR}/${PCC_IPSW_NAME}" -d "${FW_DIR}/${PCC_EXTRACT_DIR}"
-    ok "extracted to: ${FW_DIR}/${PCC_EXTRACT_DIR}"
+	mkdir -p "${FW_DIR}/${PCC_EXTRACT_DIR}"
+	unzip -o "${FW_DIR}/${PCC_IPSW_NAME}" -d "${FW_DIR}/${PCC_EXTRACT_DIR}"
+	ok "extracted to: ${FW_DIR}/${PCC_EXTRACT_DIR}"
 }
 
 # ── mix firmware components ──────────────────────────────────────────────────
@@ -117,77 +120,77 @@ extract_pcc_ipsw() {
 #                     DeviceTree, AGX, ANE, DFU, PMP, all_flash, etc.
 
 mix_firmware() {
-    log "mixing firmware components (PCC -> iPhone restore dir)..."
+	log "mixing firmware components (PCC -> iPhone restore dir)..."
 
-    local pcc="${FW_DIR}/${PCC_EXTRACT_DIR}"
-    local dst="${PATCHED_DIR}"
+	local pcc="${FW_DIR}/${PCC_EXTRACT_DIR}"
+	local dst="${PATCHED_DIR}"
 
-    # kernelcache (vphone research variants from PCC)
-    log "  copying kernelcache..."
-    cp -f "${pcc}"/kernelcache.research.vphone600 "${dst}/" 2>/dev/null || true
-    cp -f "${pcc}"/kernelcache.research.vresearch101 "${dst}/" 2>/dev/null || true
+	# kernelcache (vphone research variants from PCC)
+	log "  copying kernelcache..."
+	cp -f "${pcc}"/kernelcache.research.vphone600 "${dst}/" 2>/dev/null || true
+	cp -f "${pcc}"/kernelcache.research.vresearch101 "${dst}/" 2>/dev/null || true
 
-    # Firmware subdirectories from PCC
-    for subdir in agx all_flash ane dfu pmp; do
-        if [ -d "${pcc}/Firmware/${subdir}" ]; then
-            log "  copying Firmware/${subdir}/..."
-            mkdir -p "${dst}/Firmware/${subdir}"
-            cp -f "${pcc}/Firmware/${subdir}"/* "${dst}/Firmware/${subdir}/" 2>/dev/null || true
-        fi
-    done
+	# Firmware subdirectories from PCC
+	for subdir in agx all_flash ane dfu pmp; do
+		if [ -d "${pcc}/Firmware/${subdir}" ]; then
+			log "  copying Firmware/${subdir}/..."
+			mkdir -p "${dst}/Firmware/${subdir}"
+			cp -f "${pcc}/Firmware/${subdir}"/* "${dst}/Firmware/${subdir}/" 2>/dev/null || true
+		fi
+	done
 
-    # Top-level Firmware IM4P files from PCC (SPTM, TXM, etc.)
-    log "  copying Firmware/*.im4p..."
-    for f in "${pcc}"/Firmware/*.im4p; do
-        [ -f "$f" ] && cp -f "$f" "${dst}/Firmware/"
-    done
+	# Top-level Firmware IM4P files from PCC (SPTM, TXM, etc.)
+	log "  copying Firmware/*.im4p..."
+	for f in "${pcc}"/Firmware/*.im4p; do
+		[ -f "$f" ] && cp -f "$f" "${dst}/Firmware/"
+	done
 
-    # Custom BuildManifest.plist and Restore.plist
-    log "  installing custom BuildManifest.plist and Restore.plist..."
-    if [ -f "${CONTENTS_DIR}/BuildManifest.plist" ]; then
-        cp -f "${CONTENTS_DIR}/BuildManifest.plist" "${dst}/BuildManifest.plist"
-        ok "BuildManifest.plist"
-    else
-        warn "contents/BuildManifest.plist not found — skipping"
-    fi
+	# Custom BuildManifest.plist and Restore.plist
+	log "  installing custom BuildManifest.plist and Restore.plist..."
+	if [ -f "${CONTENTS_DIR}/BuildManifest.plist" ]; then
+		cp -f "${CONTENTS_DIR}/BuildManifest.plist" "${dst}/BuildManifest.plist"
+		ok "BuildManifest.plist"
+	else
+		warn "contents/BuildManifest.plist not found — skipping"
+	fi
 
-    if [ -f "${CONTENTS_DIR}/Restore.plist" ]; then
-        cp -f "${CONTENTS_DIR}/Restore.plist" "${dst}/Restore.plist"
-        ok "Restore.plist"
-    else
-        warn "contents/Restore.plist not found — skipping"
-    fi
+	if [ -f "${CONTENTS_DIR}/Restore.plist" ]; then
+		cp -f "${CONTENTS_DIR}/Restore.plist" "${dst}/Restore.plist"
+		ok "Restore.plist"
+	else
+		warn "contents/Restore.plist not found — skipping"
+	fi
 
-    ok "firmware mixed into: ${dst}"
+	ok "firmware mixed into: ${dst}"
 }
 
 # ── summary ──────────────────────────────────────────────────────────────────
 
 summary() {
-    echo ""
-    log "firmware setup complete"
-    echo ""
-    echo "  Restore directory: ${PATCHED_DIR}"
-    echo ""
-    echo "  Next steps:"
-    echo "    1. source setup_env.sh"
-    echo "    2. cd patch_scripts && python3 patch_fw.py -d '${PATCHED_DIR}'"
-    echo "    3. Run idevicerestore in DFU mode to flash the patched firmware"
-    echo ""
+	echo ""
+	log "firmware setup complete"
+	echo ""
+	echo "  Restore directory: ${PATCHED_DIR}"
+	echo ""
+	echo "  Next steps:"
+	echo "    1. source setup_env.sh"
+	echo "    2. cd patch_scripts && python3 patch_fw.py -d '${PATCHED_DIR}'"
+	echo "    3. Run idevicerestore in DFU mode to flash the patched firmware"
+	echo ""
 }
 
 # ── main ─────────────────────────────────────────────────────────────────────
 
 main() {
-    log "setup_download_fw.sh — download and prepare vphone600ap firmware"
-    echo ""
+	log "setup_download_fw.sh — download and prepare vphone600ap firmware"
+	echo ""
 
-    download_iphone_ipsw
-    download_pcc_ipsw
-    extract_iphone_ipsw
-    extract_pcc_ipsw
-    mix_firmware
-    summary
+	download_iphone_ipsw
+	download_pcc_ipsw
+	extract_iphone_ipsw
+	extract_pcc_ipsw
+	mix_firmware
+	summary
 }
 
 main "$@"

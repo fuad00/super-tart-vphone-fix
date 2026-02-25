@@ -30,34 +30,34 @@ RD_DIR="${1:-$REPO_ROOT/Ramdisk}"
 IRECOVERY="${IRECOVERY:-$BIN_DIR/irecovery}"
 
 if [ ! -x "$IRECOVERY" ]; then
-    echo "ERROR: irecovery not found at $IRECOVERY"
-    exit 1
+	echo "ERROR: irecovery not found at $IRECOVERY"
+	exit 1
 fi
 
 if [ ! -d "$RD_DIR" ]; then
-    echo "ERROR: Ramdisk directory not found: $RD_DIR"
-    echo "Run prepare_ramdisk.py first."
-    exit 1
+	echo "ERROR: Ramdisk directory not found: $RD_DIR"
+	echo "Run prepare_ramdisk.py first."
+	exit 1
 fi
 
 # Verify all required files exist
 REQUIRED_FILES=(
-    "iBSS.vresearch101.RELEASE.img4"
-    "iBEC.vresearch101.RELEASE.img4"
-    "sptm.vresearch1.release.img4"
-    "txm.img4"
-    "trustcache.img4"
-    "ramdisk.img4"
-    "DeviceTree.vphone600ap.img4"
-    "sep-firmware.vresearch101.RELEASE.img4"
-    "krnl.img4"
+	"iBSS.vresearch101.RELEASE.img4"
+	"iBEC.vresearch101.RELEASE.img4"
+	"sptm.vresearch1.release.img4"
+	"txm.img4"
+	"trustcache.img4"
+	"ramdisk.img4"
+	"DeviceTree.vphone600ap.img4"
+	"sep-firmware.vresearch101.RELEASE.img4"
+	"krnl.img4"
 )
 
 for f in "${REQUIRED_FILES[@]}"; do
-    if [ ! -f "$RD_DIR/$f" ]; then
-        echo "ERROR: Missing $RD_DIR/$f"
-        exit 1
-    fi
+	if [ ! -f "$RD_DIR/$f" ]; then
+		echo "ERROR: Missing $RD_DIR/$f"
+		exit 1
+	fi
 done
 
 echo "=== Loading firmware components into DFU VM ==="

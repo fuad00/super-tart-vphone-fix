@@ -18,13 +18,13 @@ VPHONE_MODE="${VPHONE_MODE:-1}"
 
 VM_NAME="${1:-vphone}"
 if [ "$#" -gt 0 ]; then
-  shift
+	shift
 fi
 
 if [ ! -x "${TART_BIN}" ]; then
-  echo "ERROR: tart not found at ${TART_BIN}"
-  echo "Run: bash setup_bin.sh"
-  exit 1
+	echo "ERROR: tart not found at ${TART_BIN}"
+	echo "Run: bash setup_bin.sh"
+	exit 1
 fi
 
 mkdir -p "${TART_HOME}"
