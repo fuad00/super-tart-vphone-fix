@@ -141,22 +141,106 @@ configs[3].validity      = (entitlements & 0x12) != 0;  // ← 条件启用!
 
 ## 5. Entitlement 位图
 
-`VzCore::VirtualizationEntitlements::from_current_process()` (地址 `0x23034aaf0`) 从当前进程的 SecTask 中读取 entitlement，构建位图：
+`VzCore::VirtualizationEntitlements::from_current_process()` (地址 `0x23034aaf0`) 从当前进程的 SecTask 中读取 entitlement，构建位图。实际的 bitmap 构建在 `entitlements_from_task<Base::Security::SecTask>()` (地址 `0x23034a454`) 中完成。
 
-| Bit | Mask | Entitlement |
-|:---:|:----:|:------------|
-| 0 | 0x01 | `com.apple.security.virtualization` (公开) |
-| 1 | 0x02 | `com.apple.private.virtualization` (私有) |
-| 2 | 0x04 | 第三个 entitlement |
-| 3 | 0x08 | 第四个 entitlement |
-| 4 | 0x10 | `com.apple.private.virtualization.security-research` (推测) |
-| 5 | 0x20 | `com.apple.private.virtualization.private-vsock` (推测) |
+### 完整 Entitlement 映射 (已确认)
 
-PV=3 的 validity 条件是 `(entitlements & 0x12) != 0`，即需要 **bit 1 (0x02)** 或 **bit 4 (0x10)**:
-- `com.apple.private.virtualization`
-- `com.apple.private.virtualization.security-research`
+| Bit | Mask | Entitlement | String 地址 | 说明 |
+|:---:|:----:|:------------|:-----------:|:-----|
+| 0 | 0x01 | `com.apple.security.virtualization` | `0x2303910b1` | 公开 entitlement (App Store 可用) |
+| 1 | 0x02 | `com.apple.private.virtualization` | `0x230391090` | 私有; 同时设置 bit 0，所以实际值为 0x03 |
+| 2 | 0x04 | `com.apple.vm.networking` | `0x2303910d3` | VM 网络功能 |
+| 3 | 0x08 | `com.apple.private.ggdsw.GPUProcessProtectedContent` | `0x2303910eb` | GPU 保护内容直通 |
+| 4 | 0x10 | `com.apple.private.virtualization.security-research` | `0x23039111e` | 安全研究 VM 支持 |
+| 5 | 0x20 | `com.apple.private.virtualization.private-vsock` | `0x230391151` | 私有 vsock 通信 |
 
-在 macOS 26.3 上，即使 SIP 关闭，普通进程也没有这些 entitlement，所以 PV=3 对非 Apple 签名的二进制有效为 **always false**。
+### entitlements_from_task 汇编逻辑
+
+```c
+uint32_t entitlements_from_task(SecTask task) {
+    uint32_t result = 0;
+
+    // 先检查私有 entitlement (grants bits 0+1)
+    if (SecTaskValueForEntitlement(task, "com.apple.private.virtualization"))
+        result = 3;  // 0x03 = bit 0 + bit 1
+    else if (SecTaskValueForEntitlement(task, "com.apple.security.virtualization"))
+        result = 1;  // 0x01 = bit 0 only
+
+    if (SecTaskValueForEntitlement(task, "com.apple.vm.networking"))
+        result |= 0x04;  // bit 2
+
+    if (SecTaskValueForEntitlement(task, "com.apple.private.ggdsw.GPUProcessProtectedContent"))
+        result |= 0x08;  // bit 3
+
+    if (SecTaskValueForEntitlement(task, "com.apple.private.virtualization.security-research"))
+        result |= 0x10;  // bit 4
+
+    if (SecTaskValueForEntitlement(task, "com.apple.private.virtualization.private-vsock"))
+        result |= 0x20;  // bit 5
+
+    return result;
+}
+```
+
+### PV=3 的 Entitlement 条件
+
+PV=3 的 validity 条件是 `(entitlements & 0x12) != 0`，即 `0x12 = 0x02 | 0x10` = bit 1 + bit 4:
+
+| 满足条件的 Entitlement | Bit | 说明 |
+|:----------------------:|:---:|:-----|
+| `com.apple.private.virtualization` | bit 1 (0x02) | Apple 内部通用私有虚拟化 |
+| `com.apple.private.virtualization.security-research` | bit 4 (0x10) | PCC 安全研究专用 |
+
+**任一**即可使 PV=3 的 validity byte = 1。
+
+### 当前进程的 Entitlement 状态
+
+| 场景 | Entitlement Bitmap | PV=3 validity |
+|:-----|:------------------:|:-------------:|
+| super-tart (无签名, SIP off) | 0x00 | **0** (false) |
+| super-tart + `com.apple.security.virtualization` | 0x01 | **0** (0x01 & 0x12 = 0) |
+| Apple 签名 + `com.apple.private.virtualization` | 0x03 | **1** (0x03 & 0x12 = 0x02 ≠ 0) |
+| Apple 签名 + `security-research` entitlement | 0x11 | **1** (0x11 & 0x12 = 0x10 ≠ 0) |
+
+在 macOS 26.3 上，即使 SIP 关闭，ad-hoc 签名的进程也没有 private entitlement，所以 PV=3 对非 Apple 签名的二进制有效为 **always false**。
+
+### 运行时验证 (Runtime Verification)
+
+使用 `verify_entitlements.sh` 测试工具验证: 编译一个加载 Virtualization.framework 并触发 `from_current_process()` 的 dummy 进程，用不同 entitlements 签名后启动，通过 lldb attach 读取静态变量 `from_current_process()::entitlements` 的值。
+
+> 注意: `from_current_process()` 是 void 函数，将 bitmap 存储在 C++ static local 变量中 (地址 `0x294f49a40`，`__DATA.__bss+1712`)，通过 `__cxa_guard` 实现线程安全的一次性初始化。bitmap 不在返回值寄存器中。
+
+```
+=== Test 1: No entitlements (baseline) ===
+  bitmap = 0x00
+
+=== Test 2: Each entitlement individually ===
+  Entitlement                                                  Bitmap
+  ------------------------------------------------------------ ------
+  com.apple.security.virtualization                            0x01
+  com.apple.private.virtualization                             0x03
+  com.apple.vm.networking                                      0x04
+  com.apple.private.ggdsw.GPUProcessProtectedContent           0x08
+  com.apple.private.virtualization.security-research           0x10
+  com.apple.private.virtualization.private-vsock               0x20
+
+=== Test 3: Cumulative (add entitlements one by one) ===
+  #    Added Entitlement                                            Bitmap
+  ---- ------------------------------------------------------------ ------
+  1    com.apple.security.virtualization                            0x01
+  2    com.apple.private.virtualization                             0x03
+  3    com.apple.vm.networking                                      0x07
+  4    com.apple.private.ggdsw.GPUProcessProtectedContent           0x0f
+  5    com.apple.private.virtualization.security-research           0x1f
+  6    com.apple.private.virtualization.private-vsock               0x3f
+
+=== Test 4: All entitlements ===
+  bitmap = 0x3f (expected 0x3f)
+```
+
+**所有 6 个 bit 位与 IDA 逆向分析完全一致。** 累加测试确认 OR 行为正确，`com.apple.private.virtualization` 同时设置 bit 0+1 (`0x03`)。
+
+> entitlement 检查发生在调用方进程 (caller) 的 Virtualization.framework 中，不在 XPC daemon (`com.apple.Virtualization.VirtualMachine`) 端。daemon 不做 entitlement bitmap 检查——SEP coprocessor 的拒绝是 daemon 端的独立验证逻辑，与 entitlement bitmap 无关。
 
 ---
 
