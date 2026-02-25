@@ -43,6 +43,7 @@ python3 setup_rootfs.py
 
 - `setup_bin.sh`
   - Builds OEM tools and installs them into `bin/`.
+  - Patches `super-tart`'s `VM.swift` for vphone mode (gated by `VPHONE_MODE=1`).
   - Uses repo-local SwiftPM caches to build `tart` reliably.
 - `setup_env.sh`
   - Must be sourced (not executed).
@@ -55,6 +56,7 @@ python3 setup_rootfs.py
   - Builds SSH ramdisk and signs IMG4 components.
 - `vm_boot_dfu.sh`
   - Runs `tart` in DFU mode with isolated `TART_HOME`.
+  - Exports `VPHONE_MODE=1` to enable vphone-specific VM config.
 - `patch_scripts/boot_rd.sh`
   - Loads the IMG4 stack into DFU VM via `irecovery`.
 - `patch_scripts/setup_rootfs.py`

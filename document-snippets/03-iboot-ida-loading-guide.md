@@ -3,6 +3,7 @@
 Source: User-provided guide (originally for iPhone 6,1 / iPhone 5s iBoot analysis)
 
 ## Context
+
 - Originally written for iPhone6,1 (codename "6", actually iPhone 5s)
 - macOS v10.13.1, IDA v7.0
 - Firmware: iOS v11.0 15A372, iBoot.iphone6.RELEASE.bin
@@ -31,11 +32,11 @@ Source: User-provided guide (originally for iPhone 6,1 / iPhone 5s iBoot analysi
 
 ## Our Binary Base Addresses
 
-| Binary | Base Address | Type |
-|---|---|---|
-| iBSS.raw | `0x7006C000` | iBoot bootloader |
-| iBEC.raw | `0x7006C000` | iBoot bootloader |
-| LLB.raw | `0x7006C000` | iBoot bootloader |
-| AVPBooter.raw | `0x100000` | BootROM |
-| txm.raw | `0xFFFFFFF017004000` | Mach-O (auto-detect) |
-| kcache.raw | `0xFFFFFE0007004000` | Mach-O (auto-detect) |
+| Binary        | Base Address         | Type                 |
+| ------------- | -------------------- | -------------------- |
+| iBSS.raw      | `0x7006C000`         | iBoot bootloader     |
+| iBEC.raw      | `0x7006C000`         | iBoot bootloader     |
+| LLB.raw       | `0x7006C000`         | iBoot bootloader     |
+| AVPBooter.raw | `0x100000`           | BootROM              |
+| txm.raw       | `0xFFFFFFF017004000` | Mach-O (auto-detect) |
+| kcache.raw    | `0xFFFFFE0007004000` | Mach-O (auto-detect) |

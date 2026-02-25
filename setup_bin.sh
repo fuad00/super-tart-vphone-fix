@@ -135,6 +135,12 @@ build_libgeneral() {
 build_img4tool() {
     log "building img4tool..."
     pushd "${OEMS_DIR}/img4tool" >/dev/null
+    mkdir -p m4
+    if command -v glibtoolize >/dev/null 2>&1; then
+        glibtoolize --copy --force
+    elif command -v libtoolize >/dev/null 2>&1; then
+        libtoolize --copy --force
+    fi
     ./autogen.sh
     ./configure --prefix="${LOCAL_PREFIX}" \
         --without-libfwkeyfetch \
@@ -210,13 +216,8 @@ build_idevicerestore() {
 
 build_super_tart() {
     log "building super-tart (tart)..."
-    local patch_src="${REPO_ROOT}/patch_oems/super-tart/Sources/tart/VM.swift"
     local target="${OEMS_DIR}/super-tart/Sources/tart/VM.swift"
-    if [ -f "${patch_src}" ]; then
-        log "applying patched VM.swift to super-tart..."
-        cp -f "${patch_src}" "${target}"
-        ok "VM.swift patched"
-    fi
+    patch_super_tart_vm "${target}"
     local spm_root="${REPO_ROOT}/.swiftpm"
     local spm_home="${REPO_ROOT}/.swift-home"
     mkdir -p "${spm_root}/config" "${spm_root}/security" "${spm_root}/cache" "${spm_root}/xdg-cache" "${spm_home}"
@@ -231,6 +232,151 @@ build_super_tart() {
     popd >/dev/null
     cp -f "${OEMS_DIR}/super-tart/.build/release/tart" "${BIN_DIR}/tart"
     ok "tart -> ${BIN_DIR}/tart"
+}
+
+patch_super_tart_vm() {
+    local target="$1"
+    if [ ! -f "${target}" ]; then
+        die "super-tart VM.swift not found at ${target}"
+    fi
+
+    log "patching super-tart VM.swift for vphone (VPHONE_MODE)..."
+    TARGET="${target}" python3 - <<'PY'
+from pathlib import Path
+import os
+import sys
+import textwrap
+
+path = Path(os.environ["TARGET"])
+data = path.read_text()
+
+if "VPHONE_MODE" in data:
+    print("  ✓ VM.swift already patched")
+    sys.exit(0)
+
+needle_class = "class VM: NSObject, VZVirtualMachineDelegate, ObservableObject {\n"
+if needle_class not in data:
+    raise SystemExit("patch failed: class VM declaration not found")
+
+insert_helpers = needle_class + textwrap.dedent("""\
+  static private func vphoneEnabled() -> Bool {
+    return ProcessInfo.processInfo.environment["VPHONE_MODE"] == "1"
+  }
+
+  // vzHardwareModel derives the VZMacHardwareModel config specific to the "platform type"
+  // of the VM (currently only vresearch101 supported)
+  static private func vzHardwareModel_VRESEARCH101() throws -> VZMacHardwareModel {
+    var hw_model: VZMacHardwareModel
+
+    guard let hw_descriptor = _VZMacHardwareModelDescriptor() else {
+      fatalError("Failed to create hardware descriptor")
+    }
+    hw_descriptor.setPlatformVersion(3) // .appleInternal4 = 3
+    hw_descriptor.setBoardID(0x90)
+    hw_descriptor.setISA(2)
+    hw_model = VZMacHardwareModel._hardwareModel(withDescriptor: hw_descriptor)
+
+    guard hw_model.isSupported else {
+        fatalError("VM hardware config not supported (model.isSupported = false)")
+    }
+
+    return hw_model
+  }
+
+""")
+data = data.replace(needle_class, insert_helpers)
+
+needle_platform = textwrap.dedent("""\
+    // Platform
+    configuration.platform = try vmConfig.platform.platform(nvramURL: nvramURL, needsNestedVirtualization: nested)
+
+    // Display
+    configuration.graphicsDevices = [vmConfig.platform.graphicsDevice(vmConfig: vmConfig)]
+""")
+if needle_platform not in data:
+    raise SystemExit("patch failed: platform/display block not found")
+
+replace_platform = textwrap.dedent("""\
+    let vphoneMode = Self.vphoneEnabled()
+
+    // Platform
+    if vphoneMode {
+      let vmRoot = nvramURL.deletingLastPathComponent()
+      let sepstorageURL = vmRoot.appendingPathComponent("SEPStorage")
+      let sepConfig = Dynamic._VZSEPCoprocessorConfiguration(storageURL: sepstorageURL)
+      sepConfig.debugStub = Dynamic._VZGDBDebugStubConfiguration(port: 8001)
+      Dynamic(configuration)._setCoprocessors([sepConfig.asObject])
+
+      let pconf = VZMacPlatformConfiguration()
+      pconf.hardwareModel = try vzHardwareModel_VRESEARCH101()
+
+      let serial = Dynamic._VZMacSerialNumber.initWithString("AAAAAA1337")
+      let identifier = Dynamic.VZMacMachineIdentifier._machineIdentifierWithECID(0x1111111111111111, serialNumber: serial.asObject)
+      pconf.machineIdentifier = identifier.asObject as! VZMacMachineIdentifier
+
+      pconf._setProductionModeEnabled(true)
+      pconf.auxiliaryStorage = VZMacAuxiliaryStorage(url: nvramURL)
+      configuration.platform = pconf
+    } else {
+      configuration.platform = try vmConfig.platform.platform(nvramURL: nvramURL, needsNestedVirtualization: nested)
+    }
+
+    // Display
+    if vphoneMode {
+      let graphics_config = VZMacGraphicsDeviceConfiguration()
+      let displays_config = VZMacGraphicsDisplayConfiguration(
+          widthInPixels: 1179,
+          heightInPixels: 2556,
+          pixelsPerInch: 460
+      )
+      graphics_config.displays.append(displays_config)
+      configuration.graphicsDevices = [graphics_config]
+    } else {
+      configuration.graphicsDevices = [vmConfig.platform.graphicsDevice(vmConfig: vmConfig)]
+    }
+""")
+data = data.replace(needle_platform, replace_platform)
+
+needle_kb = textwrap.dedent("""\
+    // Keyboard and mouse
+    if suspendable, let platformSuspendable = vmConfig.platform.self as? PlatformSuspendable {
+      configuration.keyboards = platformSuspendable.keyboardsSuspendable()
+      configuration.pointingDevices = platformSuspendable.pointingDevicesSuspendable()
+    } else {
+      configuration.keyboards = vmConfig.platform.keyboards()
+      configuration.pointingDevices = vmConfig.platform.pointingDevices()
+    }
+""")
+if needle_kb not in data:
+    raise SystemExit("patch failed: keyboard/mouse block not found")
+
+replace_kb = textwrap.dedent("""\
+    // Keyboard and mouse
+    if vphoneMode {
+      if #available(macOS 14, *) {
+        let keyboard = VZUSBKeyboardConfiguration()
+        configuration.keyboards = [keyboard]
+      }
+      configuration.pointingDevices = vmConfig.platform.pointingDevices()
+
+      if #available(macOS 14, *) {
+        let touch = _VZUSBTouchScreenConfiguration()
+        Dynamic(configuration)._setMultiTouchDevices([touch])
+      }
+    } else if suspendable, let platformSuspendable = vmConfig.platform.self as? PlatformSuspendable {
+      configuration.keyboards = platformSuspendable.keyboardsSuspendable()
+      configuration.pointingDevices = platformSuspendable.pointingDevicesSuspendable()
+    } else {
+      configuration.keyboards = vmConfig.platform.keyboards()
+      configuration.pointingDevices = vmConfig.platform.pointingDevices()
+    }
+""")
+data = data.replace(needle_kb, replace_kb)
+
+path.write_text(data)
+print("  ✓ VM.swift patched")
+PY
+    ok "VM.swift patched"
 }
 
 install_homebrew_tools() {

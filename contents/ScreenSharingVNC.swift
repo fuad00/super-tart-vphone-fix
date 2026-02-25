@@ -1,7 +1,7 @@
-import Foundation
-import Dynamic
-import Virtualization
 import Cocoa
+import Dynamic
+import Foundation
+import Virtualization
 import VirtualizationPrivate
 
 // class ScreenSharingVNC: VNC {
@@ -28,11 +28,11 @@ import VirtualizationPrivate
 // }
 
 enum TouchPhase: Int {
-    case begin = 0      // UITouchPhase.began
-    case moving = 1     // UITouchPhase.moved
+    case begin = 0 // UITouchPhase.began
+    case moving = 1 // UITouchPhase.moved
     case stationary = 2 // UITouchPhase.stationary
-    case end = 3        // UITouchPhase.ended
-    case cancelled = 4  // UITouchPhase.cancelled
+    case end = 3 // UITouchPhase.ended
+    case cancelled = 4 // UITouchPhase.cancelled
 }
 
 struct NormalizedResult {
@@ -41,7 +41,7 @@ struct NormalizedResult {
 }
 
 struct TouchSwipeAim {
-    var edge: Int    // offset +0 (STR X0)
+    var edge: Int // offset +0 (STR X0)
     var isInvalid: Bool // offset +8 (STRB W9)
 }
 
@@ -49,29 +49,29 @@ class VirtualMachineView: VZVirtualMachineView {
     var currentTouchSwipeAim: Int64 = 0
     var isSwipeAimActive: Bool = false
 
-    //1
+    /// 1
     override func mouseDragged(with event: NSEvent) {
         handleMouseDraggedInternal(event)
-        
+
         super.mouseDragged(with: event)
     }
 
     private func handleMouseDraggedInternal(_ event: NSEvent) {
-        let multiTouchDevices: NSArray = Dynamic(self.virtualMachine)._multiTouchDevices.asArray!
+        let multiTouchDevices: NSArray = Dynamic(virtualMachine)._multiTouchDevices.asArray!
 
         let locationInWindow = event.locationInWindow
         let normalizedPoint = normalizeCoordinate(locationInWindow)
-        
-        let swipeAim = self.getCurrentTouchSwipeAim()
 
-        if (multiTouchDevices.count as Int > 0) {
+        let swipeAim = getCurrentTouchSwipeAim()
+
+        if multiTouchDevices.count as Int > 0 {
             guard let touch = VZTouchHelper.createTouch(
-            withView: self.virtualMachine,
-            index: 0,
-            phase: 1,
-            location: normalizedPoint.point, // 이제 CGPoint를 그대로 넘겨도 안전합니다!
-            swipeAim: Int(swipeAim),
-            timestamp: event.timestamp
+                withView: virtualMachine,
+                index: 0,
+                phase: 1,
+                location: normalizedPoint.point, // 이제 CGPoint를 그대로 넘겨도 안전합니다!
+                swipeAim: Int(swipeAim),
+                timestamp: event.timestamp,
             ) else {
                 return
             }
@@ -83,33 +83,33 @@ class VirtualMachineView: VZVirtualMachineView {
         }
     }
 
-    //2
+    /// 2
     override func mouseDown(with event: NSEvent) {
         handleMouseDownInternal(event)
-        
+
         super.mouseDown(with: event)
     }
 
     private func handleMouseDownInternal(_ event: NSEvent) {
-        let multiTouchDevices: NSArray = Dynamic(self.virtualMachine)._multiTouchDevices.asArray!
+        let multiTouchDevices: NSArray = Dynamic(virtualMachine)._multiTouchDevices.asArray!
 
         let locationInWindow = event.locationInWindow
         let normalizedPoint = normalizeCoordinate(locationInWindow)
-        
-        let localPoint = self.convert(locationInWindow, from: nil)
-        let edgeResult = hitTestEdge(at: localPoint)
-        self.currentTouchSwipeAim = Int64(edgeResult);
 
-        if (multiTouchDevices.count as Int > 0) {
+        let localPoint = convert(locationInWindow, from: nil)
+        let edgeResult = hitTestEdge(at: localPoint)
+        currentTouchSwipeAim = Int64(edgeResult)
+
+        if multiTouchDevices.count as Int > 0 {
             let locationValue = NSValue(point: normalizedPoint.point)
 
             guard let touch = VZTouchHelper.createTouch(
-            withView: self.virtualMachine,
-            index: 0,
-            phase: 0,
-            location: normalizedPoint.point, // 이제 CGPoint를 그대로 넘겨도 안전합니다!
-            swipeAim: edgeResult,
-            timestamp: event.timestamp
+                withView: virtualMachine,
+                index: 0,
+                phase: 0,
+                location: normalizedPoint.point, // 이제 CGPoint를 그대로 넘겨도 안전합니다!
+                swipeAim: edgeResult,
+                timestamp: event.timestamp,
             ) else {
                 return
             }
@@ -121,48 +121,48 @@ class VirtualMachineView: VZVirtualMachineView {
         }
     }
 
-    //3 
+    /// 3
     override func rightMouseDown(with event: NSEvent) {
         handleRightMouseDownInternal(event)
-        
+
         super.rightMouseDown(with: event)
     }
 
     private func handleRightMouseDownInternal(_ event: NSEvent) {
-        let multiTouchDevices: NSArray = Dynamic(self.virtualMachine)._multiTouchDevices.asArray!
+        let multiTouchDevices: NSArray = Dynamic(virtualMachine)._multiTouchDevices.asArray!
 
         let locationInWindow = event.locationInWindow
         let normalizedPoint = normalizeCoordinate(locationInWindow)
-        
+
         guard !normalizedPoint.isInvalid else {
             print("normalizeCoordinate error, result.isInvalid")
-            return 
+            return
         }
 
-        let localPoint = self.convert(locationInWindow, from: nil)
+        let localPoint = convert(locationInWindow, from: nil)
         let edgeResult = hitTestEdge(at: localPoint)
 
-        self.currentTouchSwipeAim = Int64(edgeResult);
+        currentTouchSwipeAim = Int64(edgeResult)
 
-        if (multiTouchDevices.count as Int > 0) {
+        if multiTouchDevices.count as Int > 0 {
             guard let touch = VZTouchHelper.createTouch(
-            withView: self.virtualMachine,
-            index: 0,
-            phase: 0,
-            location: normalizedPoint.point, // 이제 CGPoint를 그대로 넘겨도 안전합니다!
-            swipeAim: Int(edgeResult),
-            timestamp: event.timestamp
+                withView: virtualMachine,
+                index: 0,
+                phase: 0,
+                location: normalizedPoint.point, // 이제 CGPoint를 그대로 넘겨도 안전합니다!
+                swipeAim: Int(edgeResult),
+                timestamp: event.timestamp,
             ) else {
                 return
             }
 
             guard let touch2 = VZTouchHelper.createTouch(
-            withView: self.virtualMachine,
-            index: 1,
-            phase: 0,
-            location: normalizedPoint.point, // 이제 CGPoint를 그대로 넘겨도 안전합니다!
-            swipeAim: Int(edgeResult),
-            timestamp: event.timestamp
+                withView: virtualMachine,
+                index: 1,
+                phase: 0,
+                location: normalizedPoint.point, // 이제 CGPoint를 그대로 넘겨도 안전합니다!
+                swipeAim: Int(edgeResult),
+                timestamp: event.timestamp,
             ) else {
                 return
             }
@@ -174,29 +174,29 @@ class VirtualMachineView: VZVirtualMachineView {
         }
     }
 
-    //4
+    /// 4
     override func mouseUp(with event: NSEvent) {
         handleMouseUpInternal(event)
-        
+
         super.mouseUp(with: event)
     }
 
     private func handleMouseUpInternal(_ event: NSEvent) {
-        let multiTouchDevices: NSArray = Dynamic(self.virtualMachine)._multiTouchDevices.asArray!
+        let multiTouchDevices: NSArray = Dynamic(virtualMachine)._multiTouchDevices.asArray!
 
         let locationInWindow = event.locationInWindow
         let normalizedPoint = normalizeCoordinate(locationInWindow)
-    
-        let swipeAim = self.getCurrentTouchSwipeAim()
 
-        if (multiTouchDevices.count as Int > 0) {
+        let swipeAim = getCurrentTouchSwipeAim()
+
+        if multiTouchDevices.count as Int > 0 {
             guard let touch = VZTouchHelper.createTouch(
-            withView: self.virtualMachine,
-            index: 0,
-            phase: 3,
-            location: normalizedPoint.point,
-            swipeAim: Int(swipeAim),
-            timestamp: event.timestamp
+                withView: virtualMachine,
+                index: 0,
+                phase: 3,
+                location: normalizedPoint.point,
+                swipeAim: Int(swipeAim),
+                timestamp: event.timestamp,
             ) else {
                 return
             }
@@ -207,48 +207,48 @@ class VirtualMachineView: VZVirtualMachineView {
         }
     }
 
-    //5. 
+    /// 5.
     override func rightMouseUp(with event: NSEvent) {
         handleRightMouseUpInternal(event)
-        
+
         super.rightMouseUp(with: event)
     }
 
     private func handleRightMouseUpInternal(_ event: NSEvent) {
-        let multiTouchDevices: NSArray = Dynamic(self.virtualMachine)._multiTouchDevices.asArray!
+        let multiTouchDevices: NSArray = Dynamic(virtualMachine)._multiTouchDevices.asArray!
 
         let locationInWindow = event.locationInWindow
         let normalizedPoint = normalizeCoordinate(locationInWindow)
-        
+
         guard !normalizedPoint.isInvalid else {
             print("normalizeCoordinate error, result.isInvalid")
-            return 
+            return
         }
 
-        let localPoint = self.convert(locationInWindow, from: nil)
+        let localPoint = convert(locationInWindow, from: nil)
         let edgeResult = hitTestEdge(at: localPoint)
 
-        let swipeAim = self.getCurrentTouchSwipeAim()
+        let swipeAim = getCurrentTouchSwipeAim()
 
-        if (multiTouchDevices.count as Int > 0) {
+        if multiTouchDevices.count as Int > 0 {
             guard let touch = VZTouchHelper.createTouch(
-            withView: self.virtualMachine,
-            index: 0,
-            phase: 3,
-            location: normalizedPoint.point,
-            swipeAim: Int(swipeAim),
-            timestamp: event.timestamp
+                withView: virtualMachine,
+                index: 0,
+                phase: 3,
+                location: normalizedPoint.point,
+                swipeAim: Int(swipeAim),
+                timestamp: event.timestamp,
             ) else {
                 return
             }
 
             guard let touch2 = VZTouchHelper.createTouch(
-            withView: self.virtualMachine,
-            index: 1,
-            phase: 3,
-            location: normalizedPoint.point,
-            swipeAim: Int(swipeAim),
-            timestamp: event.timestamp
+                withView: virtualMachine,
+                index: 1,
+                phase: 3,
+                location: normalizedPoint.point,
+                swipeAim: Int(swipeAim),
+                timestamp: event.timestamp,
             ) else {
                 return
             }
@@ -269,38 +269,38 @@ class VirtualMachineView: VZVirtualMachineView {
     }
 
     private func convertToNormalizedPoint(_ point: NSPoint) -> CGPoint {
-        let localPoint = self.convert(point, from: nil)
-        let bounds = self.bounds
-        
+        let localPoint = convert(point, from: nil)
+        let bounds = bounds
+
         if bounds.width == 0 || bounds.height == 0 {
             return .zero
         }
-        
+
         let x = Double(localPoint.x / bounds.width)
         let y = Double(localPoint.y / bounds.height)
-        
+
         return CGPoint(x: x, y: y)
     }
 
     func normalizeCoordinate(_ point: CGPoint) -> NormalizedResult {
-        let bounds = self.bounds
-        
+        let bounds = bounds
+
         if bounds.size.width <= 0 || bounds.size.height <= 0 {
             return NormalizedResult(point: .zero, isInvalid: true)
         }
-        
-        let localPoint = self.convert(point, from: nil)
-        
+
+        let localPoint = convert(point, from: nil)
+
         var nx = Double(localPoint.x / bounds.size.width)
         var ny = Double(localPoint.y / bounds.size.height)
-        
+
         nx = max(0.0, min(1.0, nx))
         ny = max(0.0, min(1.0, ny))
-        
-        if !self.isFlipped {
+
+        if !isFlipped {
             ny = 1.0 - ny
         }
-        
+
         return NormalizedResult(point: CGPoint(x: nx, y: ny), isInvalid: false)
     }
 
@@ -339,10 +339,10 @@ class VirtualMachineView: VZVirtualMachineView {
         // 6. view.isFlipped 검사 및 Y 좌표 보정
         // iOS(UIView)는 기본적으로 true, macOS(NSView)는 false가 기본값입니다.
         #if canImport(AppKit)
-        let isFlipped = view.isFlipped
+            let isFlipped = view.isFlipped
         #else
-        // UIView는 isFlipped 속성이 없지만 CoreGraphics 좌표계 관점에서 항상 뒤집혀 있다고 취급됨
-        let isFlipped = true 
+            // UIView는 isFlipped 속성이 없지만 CoreGraphics 좌표계 관점에서 항상 뒤집혀 있다고 취급됨
+            let isFlipped = true
         #endif
 
         if !isFlipped {
@@ -354,23 +354,23 @@ class VirtualMachineView: VZVirtualMachineView {
     }
 
     private func isValid(_ point: CGPoint) -> Bool {
-        return !point.x.isNaN && !point.y.isNaN
+        !point.x.isNaN && !point.y.isNaN
     }
 
     func hitTestEdge(at point: CGPoint) -> Int {
-        let bounds = self.bounds
+        let bounds = bounds
         let clickX = point.x
         let clickY = point.y
-        
+
         let width = bounds.size.width
         let height = bounds.size.height
-        
+
         let distLeft = clickX
         let distRight = width - clickX
-        
+
         var minDist: Double
         var edgeCode: Int
-        
+
         if distRight < distLeft {
             minDist = distRight
             edgeCode = 4 // Right
@@ -378,22 +378,22 @@ class VirtualMachineView: VZVirtualMachineView {
             minDist = distLeft
             edgeCode = 8 // Left
         }
-        
-        let topCode = self.isFlipped ? 2 : 1
-        let bottomCode = self.isFlipped ? 1 : 2
-        
+
+        let topCode = isFlipped ? 2 : 1
+        let bottomCode = isFlipped ? 1 : 2
+
         let distTop = clickY
         if distTop < minDist {
             minDist = distTop
             edgeCode = topCode
         }
-        
+
         let distBottom = height - clickY
         if distBottom < minDist {
             minDist = distBottom
             edgeCode = bottomCode
         }
-        
+
         if minDist < 32.0 {
             return edgeCode
         } else {
@@ -401,10 +401,6 @@ class VirtualMachineView: VZVirtualMachineView {
         }
     }
 
-
-
-
-    
     // override func mouseDown(with event: NSEvent) {
     //     print("Mouse Down at: \(event.locationInWindow)")
 
@@ -461,29 +457,29 @@ class VirtualMachineView: VZVirtualMachineView {
 class ScreenSharingVNC: VNC {
     let vmConfig: VMConfig
     var virtualMachine: VZVirtualMachine?
-    
-    // 윈도우 참조를 유지하기 위한 프로퍼티
+
+    /// 윈도우 참조를 유지하기 위한 프로퍼티
     private var windowController: NSWindowController?
 
     init(vmConfig: VMConfig) {
         self.vmConfig = vmConfig
     }
-    
-    // 주입받은 실행 중인 VM 인스턴스를 저장하는 메서드가 필요할 수 있습니다.
-    // 기존 코드에는 없었지만, 직접 화면을 그리려면 실행 중인 VZVirtualMachine 객체가 필수입니다.
+
+    /// 주입받은 실행 중인 VM 인스턴스를 저장하는 메서드가 필요할 수 있습니다.
+    /// 기존 코드에는 없었지만, 직접 화면을 그리려면 실행 중인 VZVirtualMachine 객체가 필수입니다.
     func setVirtualMachine(_ vm: VZVirtualMachine) {
-        self.virtualMachine = vm
+        virtualMachine = vm
     }
 
     // 기존: URL을 반환 (VNC 연결용)
     // 변경: 직접 윈도우를 띄우고, 더미 URL 혹은 로컬 URL을 반환하여 흐름 유지
-    func waitForURL(netBridged: Bool) async throws -> URL {
+    func waitForURL(netBridged _: Bool) async throws -> URL {
         // UI 조작은 메인 스레드에서 실행되어야 함
         try await MainActor.run {
             guard let vm = self.virtualMachine else {
                 throw NSError(domain: "ScreenSharingVNC", code: -1, userInfo: [NSLocalizedDescriptionKey: "VM instance not set"])
             }
-            
+
             self.openVMWindow(for: vm)
         }
 
@@ -498,12 +494,12 @@ class ScreenSharingVNC: VNC {
             self.windowController = nil
         }
     }
-    
+
     // MARK: - Private Helpers
-    
+
     private func openVMWindow(for vm: VZVirtualMachine) {
         let vmView: NSView
-        // macOS 16.0 (Tahoe) 이상인지 런타임 체크 
+        // macOS 16.0 (Tahoe) 이상인지 런타임 체크
         // (만약 타겟 버전이 다르면 16.0을 15.0 등으로 수정하세요)
         if #available(macOS 16.0, *) {
             let view = VZVirtualMachineView()
@@ -516,10 +512,10 @@ class ScreenSharingVNC: VNC {
             view.capturesSystemKeys = true
             vmView = view
         }
-        
+
         let pixelWidth: CGFloat = 1179
         let pixelHeight: CGFloat = 2556
-        let scale: CGFloat = 3.0 
+        let scale: CGFloat = 3.0
 
         let windowSize = NSSize(width: pixelWidth, height: pixelHeight)
 
@@ -527,34 +523,33 @@ class ScreenSharingVNC: VNC {
             contentRect: NSRect(origin: .zero, size: windowSize),
             styleMask: [.titled, .closable, .resizable, .miniaturizable], // resizable이 있어야 비율 고정이 먹힘
             backing: .buffered,
-            defer: false
+            defer: false,
         )
 
         window.contentAspectRatio = windowSize
-        
+
         window.title = "vphone"
         window.contentView = vmView
         window.center()
-      
-        
+
         // 3. 윈도우 컨트롤러에 저장 (메모리 해제 방지)
         let controller = NSWindowController(window: window)
         controller.showWindow(nil)
-        
-        self.windowController = controller
+
+        windowController = controller
 
         // 1) NSApplication 인스턴스가 없다면 생성 (CLI 툴 환경 대비)
         if NSApp == nil {
             _ = NSApplication.shared
         }
-        
+
         // 2) 앱의 활성화 정책을 'regular'로 변경 (Dock에 아이콘 표시 및 포커스 획득 가능)
         // 만약 Dock에 아이콘이 생기는 게 싫다면 .accessory 로 설정하세요.
         NSApp.setActivationPolicy(.regular)
-        
+
         // 3) 윈도우를 최상단으로 올리고 키보드 입력을 받을 수 있는 메인 창으로 설정
         window.makeKeyAndOrderFront(nil)
-        
+
         // 4) 터미널을 무시하고 이 앱(윈도우)을 강제로 맨 앞으로 활성화하여 포커스 가져오기
         NSApp.activate(ignoringOtherApps: true)
     }

@@ -22,7 +22,7 @@ Then, around January of this year, a tweet was posted showing a virtual iPhone b
 
 ![Source: [https://x.com/_inside/status/2008951845725548783](https://x.com/_inside/status/2008951845725548783)](contents/Screenshot_2026-02-24_at_7.37.31_PM.png)
 
-Source: [https://x.com/_inside/status/2008951845725548783](https://x.com/_inside/status/2008951845725548783)
+Source: [https://x.com/\_inside/status/2008951845725548783](https://x.com/_inside/status/2008951845725548783)
 
 ![Screenshot 2026-02-24 at 7.39.03 PM.png](contents/Screenshot_2026-02-24_at_7.39.03_PM.png)
 
@@ -109,7 +109,7 @@ class VM: NSObject, VZVirtualMachineDelegate, ObservableObject {
     }
     sep_config.debugStub = Dynamic._VZGDBDebugStubConfiguration(port: 8001)
     configuration._setCoprocessors([sep_config.asObject])
-    
+
     // Some vresearch101 config
     let pconf = VZMacPlatformConfiguration()
     pconf.hardwareModel = try vzHardwareModel_VRESEARCH101()
@@ -144,7 +144,7 @@ class VM: NSObject, VZVirtualMachineDelegate, ObservableObject {
     )
     graphics_config.displays.append(displays_config)
     configuration.graphicsDevices = [graphics_config]
- ...   
+ ...
 ```
 
 # Modifying the Firmware
@@ -164,9 +164,9 @@ I have used it quite usefully recently while I [studying XNU kernel 1-day vulner
 I mixed the components of cloudOS 26.1 (23B85) and iOS 26.1 (iPhone17,3; 23B85), uh,,, but... I can't remember the exact details. To be precise, I had to properly mix the iPhone 16 and vphone-related components to create the custom firmware, but I've forgotten exactly which ones I ended up mixing. From what I recall:
 
 - BuildManifest.plist:
-I modified the dictionary elements under the Manifest key. I configured it so that during the restore process, the SystemVolume, SystemVolumeCanonicalMetadata, OS, StaticTrustCache, RestoreTrustCache, and RestoreRamDisk from iPhone 16(iOS 26.1) model would be used. The rest were set up to use vphone-related files from PCC firmware.
+  I modified the dictionary elements under the Manifest key. I configured it so that during the restore process, the SystemVolume, SystemVolumeCanonicalMetadata, OS, StaticTrustCache, RestoreTrustCache, and RestoreRamDisk from iPhone 16(iOS 26.1) model would be used. The rest were set up to use vphone-related files from PCC firmware.
 - Restore.plist:
-I believe I added properties related to DeviceMap or SupportedProductTypes, or changed the SystemRestoreImageFileSystems element.
+  I believe I added properties related to DeviceMap or SupportedProductTypes, or changed the SystemRestoreImageFileSystems element.
 
 The files below are the final result of my mix.
 
@@ -201,7 +201,7 @@ os.system("echo 'Done, grabbed all needed components for restoring'")
 
 ## Patch AVPBooter.vresearch1.bin
 
-I referenced [that post](https://gist.github.com/steven-michaud/fda019a4ae2df3a9295409053a53a65c#iboot-stage-0-avpbootervmapple2binorg). You must patch `image4_validate_property_callback` in order to load  custom bootloader afterward. Simply use "Text-search (slow!)" feature in IDA Pro to search for "0x4447", and patch the epilogue of the corresponding function to always return 0.
+I referenced [that post](https://gist.github.com/steven-michaud/fda019a4ae2df3a9295409053a53a65c#iboot-stage-0-avpbootervmapple2binorg). You must patch `image4_validate_property_callback` in order to load custom bootloader afterward. Simply use "Text-search (slow!)" feature in IDA Pro to search for "0x4447", and patch the epilogue of the corresponding function to always return 0.
 
 ![image.png](contents/image%201.png)
 
@@ -268,7 +268,7 @@ patch(0x2c060, 0xd2800000)      #FFFFFFF017030060
 # _apfs_vfsop_mount: Prevent panic "Failed to find the root snapshot. Rooting from the live fs ..."
 patch(0x2476964, 0xd503201f)  #FFFFFE000947A964
 # _authapfs_seal_is_broken: Prevent panic "root volume seal is broken ..."
-patch(0x23cfde4, 0xd503201f) #FFFFFE00093D3DE4 
+patch(0x23cfde4, 0xd503201f) #FFFFFE00093D3DE4
 # _bsd_init: Prevent panic "rootvp not authenticated after mounting ..."
 patch(0xf6d960, 0xd503201f)    #FFFFFE0007F71960
 ...
@@ -395,7 +395,7 @@ pyimg4 im4m  extract -i shsh/[ECID]-iPhone99,11-26.1.shsh -o vphone.im4m
 Then, using that IM4M file, I generated several IMG4 files for each of the firmware components used, such as iBSS, iBEC, and the devicetree.
 
 ```python
-# 1. Grab & Patch iBSS 
+# 1. Grab & Patch iBSS
 if not os.path.exists("iPhone17\\,3_26.1_23B85_Restore/Firmware/dfu/iBSS.vresearch101.RELEASE.im4p.bak"):
     os.system("cp iPhone17\\,3_26.1_23B85_Restore/Firmware/dfu/iBSS.vresearch101.RELEASE.im4p iPhone17\\,3_26.1_23B85_Restore/Firmware/dfu/iBSS.vresearch101.RELEASE.im4p.bak")
 os.system("tools/img4 -i iPhone17\\,3_26.1_23B85_Restore/Firmware/dfu/iBSS.vresearch101.RELEASE.im4p.bak -o iBSS.vresearch101.RELEASE")
@@ -620,7 +620,7 @@ os.system("rm custom_26.1/seputil 2>/dev/null")
 os.system("rm custom_26.1/seputil.bak 2>/dev/null")
 # backup seputil before patch
 file_path = "/mnt1/usr/libexec/seputil.bak"
-if not check_remote_file_exists(file_path): 
+if not check_remote_file_exists(file_path):
      print(f"Created backup {file_path}")
      remote_cmd("/bin/cp /mnt1/usr/libexec/seputil /mnt1/usr/libexec/seputil.bak")
 # grab seputil
@@ -647,7 +647,7 @@ remote_cmd("/bin/mv /mnt3/*.gl /mnt3/AA.gl")
 # ========= INSTALL iosbinpack64 =========
 # Send to rootfs
 os.system("tools/sshpass -p 'alpine' scp -q -r -ostricthostkeychecking=false -ouserknownhostsfile=/dev/null -o StrictHostKeyChecking=no -P 2222 jb/iosbinpack64.tar 'root@127.0.0.1:/mnt1'")
-# Unpack 
+# Unpack
 remote_cmd("/usr/bin/tar --preserve-permissions --no-overwrite-dir -xvf /mnt1/iosbinpack64.tar  -C /mnt1")
 remote_cmd("/bin/rm /mnt1/iosbinpack64.tar")
 # Setup initial dropbear after normal boot
@@ -663,7 +663,7 @@ os.system("rm custom_26.1/launchd_cache_loader 2>/dev/null")
 os.system("rm custom_26.1/launchd_cache_loader.bak 2>/dev/null")
 # backup launchd_cache_loader before patch
 file_path = "/mnt1/usr/libexec/launchd_cache_loader.bak"
-if not check_remote_file_exists(file_path): 
+if not check_remote_file_exists(file_path):
      print(f"Created backup {file_path}")
      remote_cmd("/bin/cp /mnt1/usr/libexec/launchd_cache_loader /mnt1/usr/libexec/launchd_cache_loader.bak")
 # grab launchd_cache_loader
@@ -690,13 +690,13 @@ remote_cmd("/bin/chmod 0644 /mnt1/System/Library/LaunchDaemons/bash.plist")
 remote_cmd("/bin/chmod 0644 /mnt1/System/Library/LaunchDaemons/dropbear.plist")
 remote_cmd("/bin/chmod 0644 /mnt1/System/Library/LaunchDaemons/trollvnc.plist")
 
-# Edit /System/Library/xpc/launchd.plist 
+# Edit /System/Library/xpc/launchd.plist
 # remove if already exist
 os.system("rm custom_26.1/launchd.plist 2>/dev/null")
 os.system("rm custom_26.1/launchd.plist.bak 2>/dev/null")
 # backup launchd.plist before patch
 file_path = "/mnt1/System/Library/xpc/launchd.plist.bak"
-if not check_remote_file_exists(file_path): 
+if not check_remote_file_exists(file_path):
      print(f"Created backup {file_path}")
      remote_cmd("/bin/cp /mnt1/System/Library/xpc/launchd.plist /mnt1/System/Library/xpc/launchd.plist.bak")
 # grab launchd.plist
@@ -792,7 +792,7 @@ int main(int argc, char *argv[], char *envp[]) {
 - Running result
 
 ```python
--bash-4.4# ./MetalTest 
+-bash-4.4# ./MetalTest
 2026-02-08 22:49:02.293 MetalTest[633:9434] device: (null)
 2026-02-08 22:49:02.294 MetalTest[633:9434] Metal Not Supported!
 -bash-4.4# sysctl kern.version
@@ -804,11 +804,11 @@ Normally, the output should have looked like the result below.
 ```python
 seo@seos-Virtual-Machine Desktop % sysctl kern.version
 kern.version: Darwin Kernel Version 25.0.0: Mon Aug 25 21:17:21 PDT 2025; root:xnu-12377.1.9~3/RELEASE_ARM64_VMAPPLE
-seo@seos-Virtual-Machine Desktop % ./MetalTest        
+seo@seos-Virtual-Machine Desktop % ./MetalTest
 2026-02-08 23:16:56.846 MetalTest[682:5810] device: <AppleParavirtDevice: 0x102c48fe0>
     name = Apple Paravirtual device
 2026-02-08 23:16:56.847 MetalTest[682:5810] Metal Device Create Success: Apple Paravirtual device
-seo@seos-Virtual-Machine Desktop % 
+seo@seos-Virtual-Machine Desktop %
 ```
 
 Checking with `ioreg -l`, as you can see, the kernel was actually recognizing AppleParavirtGPU.
