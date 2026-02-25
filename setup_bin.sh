@@ -290,11 +290,14 @@ insert_helpers = needle_class + textwrap.dedent("""\
 """)
 data = data.replace(needle_class, insert_helpers)
 
-platform_pattern = re.compile(
-    r"(\\s*// Platform\\s*\\n\\s*configuration\\.platform\\s*=.*?\\n\\s*// Display\\s*\\n\\s*configuration\\.graphicsDevices\\s*=.*?\\n)",
-    re.DOTALL,
-)
-replace_platform = textwrap.dedent("""\
+def indent_block(block: str, indent: str) -> str:
+    lines = block.splitlines()
+    return "\n".join((indent + line if line else line) for line in lines) + "\n"
+
+def line_start(s: str, idx: int) -> int:
+    return s.rfind("\n", 0, idx) + 1
+
+platform_block = textwrap.dedent("""\
     let vphoneMode = Self.vphoneEnabled()
 
     // Platform
@@ -333,15 +336,16 @@ replace_platform = textwrap.dedent("""\
       configuration.graphicsDevices = [vmConfig.platform.graphicsDevice(vmConfig: vmConfig)]
     }
 """)
-data, count = platform_pattern.subn(replace_platform, data, count=1)
-if count == 0:
-    raise SystemExit("patch failed: platform/display block not found")
 
-kb_pattern = re.compile(
-    r"(\\s*// Keyboard and mouse\\s*\\n\\s*if\\s*suspendable,\\s*let\\s*platformSuspendable.*?\\n\\s*}\\s*else\\s*\\{\\s*\\n\\s*configuration\\.keyboards\\s*=.*?\\n\\s*configuration\\.pointingDevices\\s*=.*?\\n\\s*}\\s*\\n)",
-    re.DOTALL,
-)
-replace_kb = textwrap.dedent("""\
+platform_start = data.find("// Platform")
+platform_end = data.find("// Audio", platform_start)
+if platform_start == -1 or platform_end == -1:
+    raise SystemExit("patch failed: platform/display block not found")
+platform_line = line_start(data, platform_start)
+platform_indent = re.match(r"[ \\t]*", data[platform_line:]).group(0)
+data = data[:platform_line] + indent_block(platform_block, platform_indent) + data[platform_end:]
+
+kb_block = textwrap.dedent("""\
     // Keyboard and mouse
     if vphoneMode {
       if #available(macOS 14, *) {
@@ -351,8 +355,8 @@ replace_kb = textwrap.dedent("""\
       configuration.pointingDevices = vmConfig.platform.pointingDevices()
 
       if #available(macOS 14, *) {
-        let touch = _VZUSBTouchScreenConfiguration()
-        Dynamic(configuration)._setMultiTouchDevices([touch])
+        let touch = Dynamic._VZUSBTouchScreenConfiguration()
+        Dynamic(configuration)._setMultiTouchDevices([touch.asObject])
       }
     } else if suspendable, let platformSuspendable = vmConfig.platform.self as? PlatformSuspendable {
       configuration.keyboards = platformSuspendable.keyboardsSuspendable()
@@ -362,9 +366,14 @@ replace_kb = textwrap.dedent("""\
       configuration.pointingDevices = vmConfig.platform.pointingDevices()
     }
 """)
-data, count = kb_pattern.subn(replace_kb, data, count=1)
-if count == 0:
+
+kb_start = data.find("// Keyboard and mouse")
+kb_end = data.find("// Networking", kb_start)
+if kb_start == -1 or kb_end == -1:
     raise SystemExit("patch failed: keyboard/mouse block not found")
+kb_line = line_start(data, kb_start)
+kb_indent = re.match(r"[ \\t]*", data[kb_line:]).group(0)
+data = data[:kb_line] + indent_block(kb_block, kb_indent) + data[kb_end:]
 
 path.write_text(data)
 print("  ✓ VM.swift patched")
