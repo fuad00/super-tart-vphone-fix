@@ -74,7 +74,13 @@ check_submodules() {
             git -C "${REPO_ROOT}" submodule update --init -- "oems/${mod}"
         fi
     done
-    ok "submodules ready"
+
+    # reset all oems/ submodule pointers (including nested ones like
+    # SSHRD_Script/sshtars) back to their committed state so oems/ stays
+    # pristine — any local modifications belong in patch_oems/ or patch_scripts/
+    log "resetting oems/ submodule pointers to committed state..."
+    git -C "${REPO_ROOT}" submodule update --init --recursive -- oems/
+    ok "submodules ready (all oems/ clean)"
 }
 
 # ── python venv ──────────────────────────────────────────────────────────────
