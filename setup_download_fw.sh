@@ -31,19 +31,13 @@ IPHONE_IPSW_URL="https://updates.cdn-apple.com/2025FallFCS/fullrestores/089-1386
 IPHONE_IPSW_NAME="iPhone17,3_26.1_23B85_Restore.ipsw"
 IPHONE_RESTORE_DIR="iPhone17,3_26.1_23B85_Restore"
 
+# PCC (cloudOS) firmware — IPSW asset from Apple's transparency log CDN.
+# URL pattern: https://updates.cdn-apple.com/private-cloud-compute/<sha256>
+# The hash can be found via: pccvre release dump --release <index> --detail
+# Look for the ASSET_TYPE_OS entry with FILE_TYPE_IPSW in the metadata JSON.
+PCC_IPSW_URL="https://updates.cdn-apple.com/private-cloud-compute/399b664dd623358c3de118ffc114e42dcd51c9309e751d43bc949b98f4e31349"
 PCC_IPSW_NAME="pcc_os_23B85.ipsw"
 PCC_EXTRACT_DIR="pcc_extracted"
-
-# The PCC release index for cloudOS 23B85 in Apple's transparency log.
-# Use: pccvre release download -R <index>
-# Find the index with: pccvre release list | grep 23B85
-# The IPSW is the largest asset in the downloaded release directory.
-PCC_RELEASE_NOTE="To download PCC firmware, use Apple's pccvre tool:
-  1. Build pccvre from oems/security-pcc/srd_tools/vre/
-  2. List releases:  pccvre release list
-  3. Find cloudOS 23B85 index, then: pccvre release download -R <index>
-  4. The downloaded .ipsw is in ~/Library/Group Containers/.../assets/
-  5. Copy it to: ${FW_DIR}/${PCC_IPSW_NAME}"
 
 PATCHED_DIR="${FW_DIR}/firmware_patched/${IPHONE_RESTORE_DIR}"
 
