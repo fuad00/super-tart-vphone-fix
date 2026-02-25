@@ -240,7 +240,79 @@ PV=3 的 validity 条件是 `(entitlements & 0x12) != 0`，即 `0x12 = 0x02 | 0x
 
 **所有 6 个 bit 位与 IDA 逆向分析完全一致。** 累加测试确认 OR 行为正确，`com.apple.private.virtualization` 同时设置 bit 0+1 (`0x03`)。
 
-> entitlement 检查发生在调用方进程 (caller) 的 Virtualization.framework 中，不在 XPC daemon (`com.apple.Virtualization.VirtualMachine`) 端。daemon 不做 entitlement bitmap 检查——SEP coprocessor 的拒绝是 daemon 端的独立验证逻辑，与 entitlement bitmap 无关。
+### XPC Daemon 及其他 Entitlements 扫描
+
+XPC daemon (`com.apple.Virtualization.VirtualMachine.xpc`) 本身拥有 28 个 entitlements。将所有 daemon entitlements 以及 Virtualization.framework 二进制中找到的 entitlement-like 字符串全部逐一测试:
+
+```
+=== XPC daemon entitlements (not in known 6) ===
+  Entitlement                                                  Bitmap
+  ------------------------------------------------------------ ------
+  com.apple.ane.iokit-user-access                              0x00
+  com.apple.aned.private.adapterWeight.allow                   0x00
+  com.apple.aned.private.allow                                 0x00
+  com.apple.developer.kernel.increased-memory-limit            0x00
+  com.apple.private.AppleVirtualPlatformIdentity               0x00
+  com.apple.private.FairPlayIOKitUserClient.Virtual.access     0x00
+  com.apple.private.PCIPassthrough.access                      0x00
+  com.apple.private.ane.privileged-vm-client                   0x00
+  com.apple.private.apfs.no-padding                            0x00
+  com.apple.private.biometrickit.allow-match                   0x00
+  com.apple.private.fpsd.client                                0x00
+  com.apple.private.hypervisor                                 0x00
+  com.apple.private.proreshw                                   0x00
+  com.apple.private.security.message-filter                    0x00
+  com.apple.private.system-keychain                            0x00
+  com.apple.private.vfs.open-by-id                             0x00
+  com.apple.private.virtualization.linux-gpu-support           0x00
+  com.apple.private.virtualization.plugin-loader               0x00
+  com.apple.private.xpc.domain-extension                       0x00
+  com.apple.security.hardened-process                          0x00
+  com.apple.security.hypervisor                                0x00
+  com.apple.usb.hostcontrollerinterface                        0x00
+
+=== All entitlements combined ===
+  bitmap = 0x3f
+```
+
+**确认: bitmap 只有 6 bit (0x3f)。** XPC daemon 的 22 个其他 entitlements（包括 `com.apple.private.hypervisor`、`com.apple.security.hypervisor`、`com.apple.private.virtualization.linux-gpu-support`、`com.apple.private.virtualization.plugin-loader` 等）均不影响 bitmap。即使同时赋予全部 28 个 entitlements，bitmap 仍然只到 `0x3f`。
+
+> entitlement 检查发生在调用方进程 (caller) 的 Virtualization.framework 中，不在 XPC daemon 端。daemon 不做 entitlement bitmap 检查——SEP coprocessor 的拒绝是 daemon 端的独立验证逻辑，与 entitlement bitmap 无关。
+
+### XPC Daemon 完整 Entitlement 列表
+
+`com.apple.Virtualization.VirtualMachine.xpc` 的签名包含以下 entitlements:
+
+```
+adi-client = "3894944679"
+com.apple.ane.iokit-user-access = true
+com.apple.aned.private.adapterWeight.allow = true
+com.apple.aned.private.allow = true
+com.apple.developer.kernel.increased-memory-limit = true
+com.apple.private.AppleVirtualPlatformIdentity = true
+com.apple.private.FairPlayIOKitUserClient.Virtual.access = true
+com.apple.private.PCIPassthrough.access = true
+com.apple.private.ane.privileged-vm-client = true
+com.apple.private.apfs.no-padding = true
+com.apple.private.biometrickit.allow-match = true
+com.apple.private.fpsd.client = true
+com.apple.private.ggdsw.GPUProcessProtectedContent = true
+com.apple.private.hypervisor = true
+com.apple.private.proreshw = true
+com.apple.private.security.message-filter = true
+com.apple.private.system-keychain = true
+com.apple.private.vfs.open-by-id = true
+com.apple.private.virtualization = true
+com.apple.private.virtualization.linux-gpu-support = true
+com.apple.private.virtualization.plugin-loader = true
+com.apple.private.xpc.domain-extension = true
+com.apple.security.hardened-process = true
+com.apple.security.hypervisor = true
+com.apple.usb.hostcontrollerinterface = true
+com.apple.vm.networking = true
+keychain-access-groups = ["com.apple.Virtualization.snapshot.encryption.keychain-access-group"]
+lskdd-client = "4039799425"
+```
 
 ---
 

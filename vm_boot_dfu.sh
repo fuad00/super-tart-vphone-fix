@@ -15,16 +15,28 @@ REPO_ROOT="${SCRIPT_DIR}"
 TART_HOME="${TART_HOME:-${REPO_ROOT}/.tart}"
 TART_BIN="${TART_BIN:-${REPO_ROOT}/bin/tart}"
 VPHONE_MODE="${VPHONE_MODE:-1}"
+SKIP_SEP="${SKIP_SEP:-0}"
 
 VM_NAME="${1:-vphone}"
 if [ "$#" -gt 0 ]; then
 	shift
 fi
 
+ENTITLEMENTS="${ENTITLEMENTS:-${REPO_ROOT}/tart-vphone.entitlements}"
+
 if [ ! -x "${TART_BIN}" ]; then
 	echo "ERROR: tart not found at ${TART_BIN}"
 	echo "Run: bash setup_bin.sh"
 	exit 1
+fi
+
+# Sign tart with vphone entitlements (requires SIP/AMFI disabled)
+if [ -f "${ENTITLEMENTS}" ]; then
+	echo "=== Signing tart with entitlements ==="
+	echo "  entitlements: ${ENTITLEMENTS}"
+	codesign --force --sign - --entitlements "${ENTITLEMENTS}" "${TART_BIN}"
+	echo "  signed OK"
+	echo ""
 fi
 
 mkdir -p "${TART_HOME}"
