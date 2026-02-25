@@ -8,6 +8,8 @@ This repo automates building a virtual iPhone using the vphone600ap PCC firmware
 - SIP/AMFI disabled (required by super-tart / private Virtualization.framework APIs)
 - Homebrew dependencies installed (see `setup_bin.sh` header)
 
+General binaries are: git make clang pkg-config automake autoconf libtool swift python3 ldid sshpass gtar iproxy
+
 ## Quickstart (full flow)
 
 ```bash
