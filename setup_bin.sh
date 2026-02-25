@@ -15,7 +15,6 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BIN_DIR="${REPO_ROOT}/bin"
 LOCAL_PREFIX="${REPO_ROOT}/.local"
 OEMS_DIR="${REPO_ROOT}/oems"
-PATCH_OEMS_DIR="${REPO_ROOT}/patch_oems"
 VENV_DIR="${REPO_ROOT}/.venv"
 JOBS="$(sysctl -n hw.ncpu 2>/dev/null || echo 4)"
 
@@ -62,7 +61,19 @@ check_prerequisites() {
 
 check_submodules() {
     log "checking submodules..."
-    git -C "${REPO_ROOT}" submodule update --init --recursive
+    # only init submodules we actually build (skip SSHRD_Script/sshtars etc.)
+    local build_modules=(libgeneral img4lib img4tool trustcache
+                         libirecovery idevicerestore super-tart)
+    for mod in "${build_modules[@]}"; do
+        local mod_path="${OEMS_DIR}/${mod}"
+        if [ -d "${mod_path}/.git" ] || [ -f "${mod_path}/.git" ]; then
+            # already cloned — clean build artifacts
+            git -C "${mod_path}" checkout . 2>/dev/null || true
+            git -C "${mod_path}" clean -fdx 2>/dev/null || true
+        else
+            git -C "${REPO_ROOT}" submodule update --init -- "oems/${mod}"
+        fi
+    done
     ok "submodules ready"
 }
 
@@ -91,7 +102,6 @@ prepare() {
     ensure_dir "${LOCAL_PREFIX}/bin"
     ensure_dir "${LOCAL_PREFIX}/lib/pkgconfig"
     ensure_dir "${LOCAL_PREFIX}/include"
-    ensure_dir "${PATCH_OEMS_DIR}"
 
     export PKG_CONFIG_PATH="${LOCAL_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
     export CFLAGS="-I${LOCAL_PREFIX}/include ${CFLAGS:-}"
@@ -101,44 +111,24 @@ prepare() {
 }
 
 # ── build functions ──────────────────────────────────────────────────────────
-
-# Copy source to patch_oems/ for a clean out-of-submodule build.
-# This avoids polluting the submodule working tree.
-setup_build_dir() {
-    local name="$1"
-    local src="${OEMS_DIR}/${name}"
-    local dst="${PATCH_OEMS_DIR}/${name}"
-
-    if [ -d "${dst}" ]; then
-        rm -rf "${dst}"
-    fi
-    cp -a "${src}" "${dst}"
-    # detach from submodule git
-    rm -rf "${dst}/.git"
-    echo "${dst}"
-}
+# Build directly in oems/ submodule trees so autotools version detection
+# (git rev-list --count HEAD) works correctly. Build artifacts are cleaned
+# by check_submodules on subsequent runs.
 
 build_libgeneral() {
     log "building libgeneral..."
-    local dir
-    dir="$(setup_build_dir libgeneral)"
-
-    pushd "${dir}" >/dev/null
+    pushd "${OEMS_DIR}/libgeneral" >/dev/null
     ./autogen.sh
     ./configure --prefix="${LOCAL_PREFIX}"
     make -j"${JOBS}"
     make install
     popd >/dev/null
-
     ok "libgeneral installed to ${LOCAL_PREFIX}"
 }
 
 build_img4tool() {
     log "building img4tool..."
-    local dir
-    dir="$(setup_build_dir img4tool)"
-
-    pushd "${dir}" >/dev/null
+    pushd "${OEMS_DIR}/img4tool" >/dev/null
     ./autogen.sh
     ./configure --prefix="${LOCAL_PREFIX}" \
         --without-libfwkeyfetch \
@@ -146,90 +136,78 @@ build_img4tool() {
     make -j"${JOBS}"
     make install
     popd >/dev/null
-
     cp -f "${LOCAL_PREFIX}/bin/img4tool" "${BIN_DIR}/img4tool"
     ok "img4tool -> ${BIN_DIR}/img4tool"
 }
 
 build_img4lib() {
     log "building img4 (img4lib)..."
-    local dir
-    dir="$(setup_build_dir img4lib)"
-
-    pushd "${dir}" >/dev/null
-    # on macOS: use CommonCrypto + libcompression (no external deps)
+    pushd "${OEMS_DIR}/img4lib" >/dev/null
     make clean 2>/dev/null || true
-    make COMMONCRYPTO=1 CC=clang -j"${JOBS}"
+    # macOS: CommonCrypto for crypto, libcompression for lzfse
+    # /usr/lib/libcompression.dylib is in the shared cache on modern macOS,
+    # so the Makefile wildcard check fails — override explicitly.
+    make CC=clang \
+         COMMONCRYPTO=1 \
+         CFLAGS="-Wall -W -pedantic -Wno-variadic-macros -Wno-multichar \
+                 -Wno-four-char-constants -Wno-unused-parameter -O2 -I. -g \
+                 -DiOS10 -DDER_MULTIBYTE_TAGS=1 -DDER_TAG_SIZE=8 \
+                 -D__unused=\"__attribute__((unused))\" \
+                 -DUSE_COMMONCRYPTO -DUSE_LIBCOMPRESSION" \
+         LDLIBS="-lcompression -framework Security -framework CoreFoundation" \
+         -j"${JOBS}"
     popd >/dev/null
-
-    cp -f "${dir}/img4" "${BIN_DIR}/img4"
+    cp -f "${OEMS_DIR}/img4lib/img4" "${BIN_DIR}/img4"
     ok "img4 -> ${BIN_DIR}/img4"
 }
 
 build_trustcache() {
     log "building trustcache..."
-    local dir
-    dir="$(setup_build_dir trustcache)"
-
-    # openssl flags from pkg-config
     local ssl_cflags ssl_libs
     ssl_cflags="$(pkg-config --cflags openssl)"
     ssl_libs="$(pkg-config --libs openssl)"
 
-    pushd "${dir}" >/dev/null
+    pushd "${OEMS_DIR}/trustcache" >/dev/null
     make clean 2>/dev/null || true
     make OPENSSL=1 \
-         CFLAGS="${ssl_cflags}" \
-         LDFLAGS="${ssl_libs}" \
+         CFLAGS="-DOPENSSL -DVERSION=2.0 ${ssl_cflags}" \
+         LIBS="${ssl_libs}" \
          -j"${JOBS}"
     popd >/dev/null
-
-    cp -f "${dir}/trustcache" "${BIN_DIR}/trustcache"
+    cp -f "${OEMS_DIR}/trustcache/trustcache" "${BIN_DIR}/trustcache"
     ok "trustcache -> ${BIN_DIR}/trustcache"
 }
 
 build_libirecovery() {
     log "building libirecovery (forked)..."
-    local dir
-    dir="$(setup_build_dir libirecovery)"
-
-    pushd "${dir}" >/dev/null
+    pushd "${OEMS_DIR}/libirecovery" >/dev/null
     ./autogen.sh
     ./configure --prefix="${LOCAL_PREFIX}" --with-tools
     make -j"${JOBS}"
     make install
     popd >/dev/null
-
     cp -f "${LOCAL_PREFIX}/bin/irecovery" "${BIN_DIR}/irecovery"
     ok "irecovery -> ${BIN_DIR}/irecovery"
 }
 
 build_idevicerestore() {
     log "building idevicerestore..."
-    local dir
-    dir="$(setup_build_dir idevicerestore)"
-
-    pushd "${dir}" >/dev/null
+    pushd "${OEMS_DIR}/idevicerestore" >/dev/null
     ./autogen.sh
     ./configure --prefix="${LOCAL_PREFIX}"
     make -j"${JOBS}"
     make install
     popd >/dev/null
-
     cp -f "${LOCAL_PREFIX}/bin/idevicerestore" "${BIN_DIR}/idevicerestore"
     ok "idevicerestore -> ${BIN_DIR}/idevicerestore"
 }
 
 build_super_tart() {
     log "building super-tart (tart)..."
-    local dir
-    dir="$(setup_build_dir super-tart)"
-
-    pushd "${dir}" >/dev/null
+    pushd "${OEMS_DIR}/super-tart" >/dev/null
     swift build -c release 2>&1 | tail -5
     popd >/dev/null
-
-    cp -f "${dir}/.build/release/tart" "${BIN_DIR}/tart"
+    cp -f "${OEMS_DIR}/super-tart/.build/release/tart" "${BIN_DIR}/tart"
     ok "tart -> ${BIN_DIR}/tart"
 }
 
