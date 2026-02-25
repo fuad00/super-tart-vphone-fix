@@ -243,7 +243,23 @@ patch_super_tart_vm() {
 		die "super-tart VM.swift not found at ${target}"
 	fi
 
-	log "patching super-tart VM.swift for vphone (VPHONE_MODE)..."
+	log "patching super-tart for vphone (VPHONE_MODE)..."
+
+	# Patch VMDirectory.swift to add sepromURL
+	local vmdir_target
+	vmdir_target="$(dirname "${target}")/VMDirectory.swift"
+	if [ -f "${vmdir_target}" ] && ! grep -q "sepromURL" "${vmdir_target}"; then
+		log "  patching VMDirectory.swift (add sepromURL)..."
+		sed -i '' '/var romURL: URL {/{
+N
+a\
+  }\
+  var sepromURL: URL {\
+    baseURL.appendingPathComponent("AVPSEPBooter.vresearch1.bin")
+}' "${vmdir_target}"
+		ok "  VMDirectory.swift patched"
+	fi
+
     TARGET="${target}" python3 - <<'PY'
 from pathlib import Path
 import os
@@ -269,16 +285,12 @@ insert_helpers = needle_class + textwrap.dedent("""\
 
   // vzHardwareModel derives the VZMacHardwareModel config specific to the "platform type"
   // of the VM (currently only vresearch101 supported)
-  // macOS 26+: platformVersion=2 + ISA=2 + OS version hints required for isSupported=true
+  // platformVersion=3 (.appleInternal4), boardID=0x90, ISA=2
   static private func vzHardwareModel_VRESEARCH101() throws -> VZMacHardwareModel {
     let hw_descriptor = Dynamic._VZMacHardwareModelDescriptor()
-    hw_descriptor.setPlatformVersion(2)
+    hw_descriptor.setPlatformVersion(3)
+    hw_descriptor.setBoardID(0x90)
     hw_descriptor.setISA(2)
-    // Set guest/host OS versions (required on macOS 26+)
-    let guestOS = OperatingSystemVersion(majorVersion: 26, minorVersion: 1, patchVersion: 0)
-    hw_descriptor.setInitialGuestMacOSVersion(guestOS)
-    let hostOS = ProcessInfo.processInfo.operatingSystemVersion
-    hw_descriptor.setMinimumSupportedHostOSVersion(hostOS)
 
     let hw_model_dyn = Dynamic.VZMacHardwareModel._hardwareModel(withDescriptor: hw_descriptor.asObject)
     guard let hw_model = hw_model_dyn.asObject as? VZMacHardwareModel else {
@@ -295,6 +307,18 @@ insert_helpers = needle_class + textwrap.dedent("""\
 """)
 data = data.replace(needle_class, insert_helpers)
 
+# Add sepromURL parameter to craftConfiguration signature
+data = data.replace(
+    "    romURL: URL,\n    vmConfig: VMConfig,",
+    "    romURL: URL,\n    sepromURL: URL? = nil,\n    vmConfig: VMConfig,",
+)
+
+# Add sepromURL to the init call site
+data = data.replace(
+    "nvramURL: vmDir.nvramURL, romURL: vmDir.romURL, vmConfig: config,",
+    "nvramURL: vmDir.nvramURL, romURL: vmDir.romURL, sepromURL: vmDir.sepromURL, vmConfig: config,",
+)
+
 def indent_block(block: str, indent: str) -> str:
     lines = block.splitlines()
     return "\n".join((indent + line if line else line) for line in lines) + "\n"
@@ -310,6 +334,9 @@ platform_block = textwrap.dedent("""\
       let vmRoot = nvramURL.deletingLastPathComponent()
       let sepstorageURL = vmRoot.appendingPathComponent("SEPStorage")
       let sepConfig = Dynamic._VZSEPCoprocessorConfiguration(storageURL: sepstorageURL)
+      if let sepromURL {
+        sepConfig.romBinaryURL = sepromURL
+      }
       sepConfig.debugStub = Dynamic._VZGDBDebugStubConfiguration(port: 8001)
       Dynamic(configuration)._setCoprocessors([sepConfig.asObject])
 
