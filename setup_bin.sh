@@ -270,15 +270,15 @@ insert_helpers = needle_class + textwrap.dedent("""\
   // vzHardwareModel derives the VZMacHardwareModel config specific to the "platform type"
   // of the VM (currently only vresearch101 supported)
   static private func vzHardwareModel_VRESEARCH101() throws -> VZMacHardwareModel {
-    var hw_model: VZMacHardwareModel
-
-    guard let hw_descriptor = _VZMacHardwareModelDescriptor() else {
-      fatalError("Failed to create hardware descriptor")
-    }
+    let hw_descriptor = Dynamic._VZMacHardwareModelDescriptor()
     hw_descriptor.setPlatformVersion(3) // .appleInternal4 = 3
     hw_descriptor.setBoardID(0x90)
     hw_descriptor.setISA(2)
-    hw_model = VZMacHardwareModel._hardwareModel(withDescriptor: hw_descriptor)
+
+    let hw_model_dyn = Dynamic.VZMacHardwareModel._hardwareModel(withDescriptor: hw_descriptor.asObject)
+    guard let hw_model = hw_model_dyn.asObject as? VZMacHardwareModel else {
+      fatalError("Failed to create hardware model")
+    }
 
     guard hw_model.isSupported else {
         fatalError("VM hardware config not supported (model.isSupported = false)")
@@ -315,7 +315,7 @@ platform_block = textwrap.dedent("""\
       let identifier = Dynamic.VZMacMachineIdentifier._machineIdentifierWithECID(0x1111111111111111, serialNumber: serial.asObject)
       pconf.machineIdentifier = identifier.asObject as! VZMacMachineIdentifier
 
-      pconf._setProductionModeEnabled(true)
+      Dynamic(pconf)._setProductionModeEnabled(true)
       pconf.auxiliaryStorage = VZMacAuxiliaryStorage(url: nvramURL)
       configuration.platform = pconf
     } else {
