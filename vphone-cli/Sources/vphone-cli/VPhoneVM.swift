@@ -14,6 +14,8 @@ class VPhoneVM: NSObject, VZVirtualMachineDelegate {
     var cpuCount: Int = 4
     var memorySize: UInt64 = 4 * 1024 * 1024 * 1024
     var skipSEP: Bool = true
+    var sepStorageURL: URL? = nil
+    var sepRomURL: URL? = nil
     var serial: Bool = false
     var serialPath: String? = nil
     var gdbPort: Int = 8000
@@ -98,8 +100,15 @@ class VPhoneVM: NSObject, VZVirtualMachineDelegate {
     // Coprocessors
     if options.skipSEP {
       print("[vphone] SKIP_SEP=1 — no coprocessor")
+    } else if let sepStorageURL = options.sepStorageURL {
+      VPhoneConfigureSEP(config, sepStorageURL, options.sepRomURL)
+      print("[vphone] SEP coprocessor enabled (storage: \(sepStorageURL.path))")
     } else {
-      print("[vphone] SEP not yet implemented, continuing without")
+      // Create default SEP storage next to NVRAM
+      let defaultSEPURL = options.nvramURL.deletingLastPathComponent()
+        .appendingPathComponent("sep_storage.bin")
+      VPhoneConfigureSEP(config, defaultSEPURL, options.sepRomURL)
+      print("[vphone] SEP coprocessor enabled (storage: \(defaultSEPURL.path))")
     }
 
     // Validate

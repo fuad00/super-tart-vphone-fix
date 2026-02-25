@@ -94,3 +94,42 @@ void VPhoneSetCoprocessors(VZVirtualMachineConfiguration *config, NSArray *copro
 void VPhoneDisableProductionMode(VZMacPlatformConfiguration *platform) {
   [platform _setProductionModeEnabled:NO];
 }
+
+// --- SEP Coprocessor ---
+
+@interface _VZSEPCoprocessorConfiguration : NSObject
+- (instancetype)initWithStorageURL:(NSURL *)url;
+- (void)setRomBinaryURL:(NSURL *)url;
+- (void)setDebugStub:(id)stub;
+@end
+
+id VPhoneCreateSEPCoprocessorConfig(NSURL *storageURL) {
+  Class cls = NSClassFromString(@"_VZSEPCoprocessorConfiguration");
+  if (!cls) {
+    NSLog(@"[vphone] WARNING: _VZSEPCoprocessorConfiguration not found");
+    return nil;
+  }
+  _VZSEPCoprocessorConfiguration *config = [[cls alloc] initWithStorageURL:storageURL];
+  return config;
+}
+
+void VPhoneSetSEPRomBinaryURL(id sepConfig, NSURL *romURL) {
+  if ([sepConfig respondsToSelector:@selector(setRomBinaryURL:)]) {
+    [sepConfig performSelector:@selector(setRomBinaryURL:) withObject:romURL];
+  }
+}
+
+void VPhoneConfigureSEP(VZVirtualMachineConfiguration *config,
+                        NSURL *sepStorageURL,
+                        NSURL *sepRomURL) {
+  id sepConfig = VPhoneCreateSEPCoprocessorConfig(sepStorageURL);
+  if (!sepConfig) {
+    NSLog(@"[vphone] Failed to create SEP coprocessor config");
+    return;
+  }
+  if (sepRomURL) {
+    VPhoneSetSEPRomBinaryURL(sepConfig, sepRomURL);
+  }
+  [config _setCoprocessors:@[sepConfig]];
+  NSLog(@"[vphone] SEP coprocessor configured (storage: %@)", sepStorageURL.path);
+}

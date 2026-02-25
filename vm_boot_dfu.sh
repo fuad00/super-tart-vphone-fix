@@ -1,55 +1,73 @@
 #!/bin/bash
-# vm_boot_dfu.sh — Start the vphone VM in DFU mode via super-tart.
+# vm_boot_dfu.sh — Start the vphone VM in DFU mode via vphone-cli.
 #
 # Usage:
-#   ./vm_boot_dfu.sh [vm_name] [tart args...]
+#   ./vm_boot_dfu.sh [vm_name] [extra vphone-cli args...]
 #
 # Examples:
 #   ./vm_boot_dfu.sh vphone --serial
-#   ./vm_boot_dfu.sh vphone --stop-on-panic
+#   ./vm_boot_dfu.sh vphone --skip-sep
+#   ./vm_boot_dfu.sh vphone --sep-rom /path/to/sep.bin
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="${SCRIPT_DIR}"
 TART_HOME="${TART_HOME:-${REPO_ROOT}/.tart}"
-TART_BIN="${TART_BIN:-${REPO_ROOT}/bin/tart}"
-VPHONE_MODE="${VPHONE_MODE:-1}"
-SKIP_SEP="${SKIP_SEP:-0}"
+VPHONE_CLI="${VPHONE_CLI:-${REPO_ROOT}/vphone-cli/.build/release/vphone-cli}"
 
 VM_NAME="${1:-vphone}"
 if [ "$#" -gt 0 ]; then
 	shift
 fi
 
-ENTITLEMENTS="${ENTITLEMENTS:-${REPO_ROOT}/tart-vphone.entitlements}"
+VM_DIR="${TART_HOME}/vms/${VM_NAME}"
 
-if [ ! -x "${TART_BIN}" ]; then
-	echo "ERROR: tart not found at ${TART_BIN}"
-	echo "Run: bash setup_bin.sh"
+# Paths inside the tart VM directory
+ROM="${VM_DIR}/AVPBooter.vmapple2.bin"
+DISK="${VM_DIR}/disk.img"
+NVRAM="${VM_DIR}/nvram.bin"
+SEP_STORAGE="${VM_DIR}/SEPStorage.img"
+SEP_ROM="${VM_DIR}/AVPSEPBooter.vresearch1.bin"
+
+if [ ! -x "${VPHONE_CLI}" ]; then
+	echo "ERROR: vphone-cli not found at ${VPHONE_CLI}"
+	echo "Run: cd vphone-cli && bash build_and_sign.sh"
 	exit 1
 fi
 
-# Sign tart with vphone entitlements (requires SIP/AMFI disabled)
-if [ -f "${ENTITLEMENTS}" ]; then
-	echo "=== Signing tart with entitlements ==="
-	echo "  entitlements: ${ENTITLEMENTS}"
-	codesign --force --sign - --entitlements "${ENTITLEMENTS}" "${TART_BIN}"
-	echo "  signed OK"
-	echo ""
+if [ ! -f "${ROM}" ]; then
+	echo "ERROR: ROM not found: ${ROM}"
+	echo "Create the VM directory with the required firmware files first."
+	exit 1
 fi
 
-mkdir -p "${TART_HOME}"
-
-echo "=== Starting VM in DFU mode ==="
-echo "VM name : ${VM_NAME}"
-echo "TART    : ${TART_BIN}"
-echo "TART_HOME: ${TART_HOME}"
-echo "VPHONE_MODE: ${VPHONE_MODE}"
-echo "SKIP_SEP : ${SKIP_SEP}"
-
+echo "=== Starting vphone DFU ==="
+echo "VM dir : ${VM_DIR}"
+echo "ROM    : ${ROM}"
+echo "Disk   : ${DISK}"
+echo "NVRAM  : ${NVRAM}"
+echo "SEP    : ${SEP_STORAGE}"
+echo "SEP ROM: ${SEP_ROM}"
 echo ""
-echo "Command: SKIP_SEP=${SKIP_SEP} VPHONE_MODE=${VPHONE_MODE} TART_HOME=\"${TART_HOME}\" ${TART_BIN} run ${VM_NAME} --dfu $*"
 
+# Build CLI args
+ARGS=(
+	--rom "${ROM}"
+	--disk "${DISK}"
+	--nvram "${NVRAM}"
+)
+
+# Add SEP args if files exist (unless --skip-sep passed by user)
+if [[ ! " $* " =~ " --skip-sep " ]]; then
+	if [ -f "${SEP_STORAGE}" ]; then
+		ARGS+=(--sep-storage "${SEP_STORAGE}")
+	fi
+	if [ -f "${SEP_ROM}" ]; then
+		ARGS+=(--sep-rom "${SEP_ROM}")
+	fi
+fi
+
+echo "Command: ${VPHONE_CLI} ${ARGS[*]} $*"
 echo ""
-exec env TART_HOME="${TART_HOME}" VPHONE_MODE="${VPHONE_MODE}" SKIP_SEP="${SKIP_SEP}" "${TART_BIN}" run "${VM_NAME}" --dfu "$@"
+exec "${VPHONE_CLI}" "${ARGS[@]}" "$@"

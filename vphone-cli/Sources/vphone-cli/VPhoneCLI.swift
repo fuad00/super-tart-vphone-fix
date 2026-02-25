@@ -53,7 +53,13 @@ struct VPhoneCLI: AsyncParsableCommand {
   var stopOnFatalError: Bool = false
 
   @Flag(help: "Skip SEP coprocessor setup")
-  var skipSep: Bool = true
+  var skipSep: Bool = false
+
+  @Option(help: "Path to SEP storage file (created if missing)")
+  var sepStorage: String? = nil
+
+  @Option(help: "Path to SEP ROM binary")
+  var sepRom: String? = nil
 
   @Flag(help: "Run without GUI (headless)")
   var noGraphics: Bool = false
@@ -75,7 +81,14 @@ struct VPhoneCLI: AsyncParsableCommand {
     print("CPU   : \(cpu)")
     print("Memory: \(memory) MB")
     print("GDB   : localhost:\(gdbPort)")
+    let sepStorageURL = sepStorage.map { URL(fileURLWithPath: $0) }
+    let sepRomURL = sepRom.map { URL(fileURLWithPath: $0) }
+
     print("SEP   : \(skipSep ? "skipped" : "enabled")")
+    if !skipSep {
+      print("  storage: \(sepStorage ?? "(auto)")")
+      if let r = sepRom { print("  rom    : \(r)") }
+    }
     print("")
 
     let options = VPhoneVM.Options(
@@ -85,6 +98,8 @@ struct VPhoneCLI: AsyncParsableCommand {
       cpuCount: cpu,
       memorySize: UInt64(memory) * 1024 * 1024,
       skipSEP: skipSep,
+      sepStorageURL: sepStorageURL,
+      sepRomURL: sepRomURL,
       serial: serial,
       serialPath: serialPath,
       gdbPort: gdbPort,
