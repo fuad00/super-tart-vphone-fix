@@ -1,6 +1,9 @@
 # Build artifacts
 .local/
 .venv/
+.tart/
+.swiftpm/
+.swift-home/
 
 # IDA Pro database files
 *.id0

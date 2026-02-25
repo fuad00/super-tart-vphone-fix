@@ -9,6 +9,7 @@ This repository documents the process of building a virtual iPhone using the VPH
 ├── patch_oems/            # Patched OEM sources → builds to bin/
 ├── bin/                   # Built binaries (gitignored, 11 tools)
 ├── contents/              # Writeup images, BuildManifest.plist, Restore.plist
+├── docs/                  # Archived long-form writeups
 ├── document-snippets/     # Reference docs (AVPBooter patching, vma2pwn, IDA guide)
 ├── patch_scripts/         # Firmware patching scripts
 │   ├── patch_fw.py        # Patch bootchain (iBSS/iBEC/LLB/TXM/kernel/AVPBooter)
@@ -23,6 +24,8 @@ This repository documents the process of building a virtual iPhone using the VPH
 ├── setup_bin.sh           # Build all OEM tools from submodules
 ├── setup_download_fw.sh   # Download iPhone + PCC IPSW, mix firmware
 ├── setup_env.sh           # Environment setup (must be sourced)
+├── vm_boot_dfu.sh          # Start tart VM in DFU mode (uses TART_HOME)
+├── README.md              # Script-focused quickstart
 └── requirements.txt       # Python deps (pyimg4, capstone)
 ```
 
@@ -50,6 +53,9 @@ These directories are gitignored and need to be populated before the workflow ca
 | `bin/` | `bash setup_bin.sh` (builds from submodules) | Yes (submodule fetch, homebrew) |
 | `.local/` | Built by `setup_bin.sh` (libgeneral, pkg-config) | Yes |
 | `.venv/` | `setup_bin.sh` or `python3 -m venv .venv && pip install -r requirements.txt` | Yes (PyPI) |
+| `.swiftpm/` | Built by `setup_bin.sh` (SwiftPM cache) | No |
+| `.swift-home/` | Built by `setup_bin.sh` (SwiftPM HOME) | No |
+| `.tart/` | Created when running `tart` (VM storage; `TART_HOME`) | No |
 | `firmwares/*.ipsw` | `bash setup_download_fw.sh` (~11 GB total) | Yes (Apple CDN) |
 | `firmwares/firmware_patched/` | `bash setup_download_fw.sh` or extract checkpoint 01/03 | Yes (unless checkpoint) |
 | `patch_scripts/raw/` | Extracted during patching or extract checkpoint 02/04 | No (local extraction) |
@@ -65,8 +71,9 @@ These directories are gitignored and need to be populated before the workflow ca
 5. python3 patch_fw.py -d ../firmwares/firmware_patched/iPhone17,3_26.1_23B85_Restore
                               # Patch bootchain binaries
 6. python3 prepare_ramdisk.py # Build SSH ramdisk + sign IMG4 (requires VM in DFU)
-7. bash boot_rd.sh            # Boot ramdisk in VM via irecovery
-8. python3 setup_rootfs.py    # Install Cryptex, daemons, GPU via SSH
+7. ./vm_boot_dfu.sh vphone    # Start tart VM in DFU mode (TART_HOME=.tart)
+8. bash boot_rd.sh            # Boot ramdisk in VM via irecovery
+9. python3 setup_rootfs.py    # Install Cryptex, daemons, GPU via SSH
 ```
 
 **Host requirements:** macOS with SIP/AMFI disabled (super-tart uses private Virtualization.framework APIs).

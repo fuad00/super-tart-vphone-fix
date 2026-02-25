@@ -210,8 +210,24 @@ build_idevicerestore() {
 
 build_super_tart() {
     log "building super-tart (tart)..."
+    local patch_src="${REPO_ROOT}/patch_oems/super-tart/Sources/tart/VM.swift"
+    local target="${OEMS_DIR}/super-tart/Sources/tart/VM.swift"
+    if [ -f "${patch_src}" ]; then
+        log "applying patched VM.swift to super-tart..."
+        cp -f "${patch_src}" "${target}"
+        ok "VM.swift patched"
+    fi
+    local spm_root="${REPO_ROOT}/.swiftpm"
+    local spm_home="${REPO_ROOT}/.swift-home"
+    mkdir -p "${spm_root}/config" "${spm_root}/security" "${spm_root}/cache" "${spm_root}/xdg-cache" "${spm_home}"
     pushd "${OEMS_DIR}/super-tart" >/dev/null
-    swift build -c release 2>&1 | tail -5
+    # Use repo-local SwiftPM caches and disable sandbox to avoid macOS sandbox/cache issues.
+    SWIFTPM_CONFIG_PATH="${spm_root}/config" \
+    SWIFTPM_SECURITY_PATH="${spm_root}/security" \
+    SWIFTPM_CACHE_PATH="${spm_root}/cache" \
+    XDG_CACHE_HOME="${spm_root}/xdg-cache" \
+    HOME="${spm_home}" \
+    swift build -c release --disable-sandbox 2>&1 | tail -5
     popd >/dev/null
     cp -f "${OEMS_DIR}/super-tart/.build/release/tart" "${BIN_DIR}/tart"
     ok "tart -> ${BIN_DIR}/tart"
