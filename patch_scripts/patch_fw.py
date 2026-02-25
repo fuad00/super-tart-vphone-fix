@@ -3,15 +3,24 @@
 patch_fw.py - Patch vphone600ap firmware binaries for virtual iPhone boot.
 
 Patches applied:
-  1. iBSS  - image4_validate_property_callback → return 0 (bypass signature verification)
-  2. iBEC  - image4_validate_property_callback → return 0 + boot-args override
-  3. LLB   - image4_validate_property_callback → return 0 + boot-args + SSV/rootfs bypass
-  4. TXM   - trustcache bypass (allow unsigned binaries)
-  5. kernel - SSV (Signed System Volume) bypass (prevent boot panics)
+  1. iBSS      - image4_validate_property_callback → return 0 (bypass signature verification)
+  2. iBEC      - image4_validate_property_callback → return 0 + boot-args override
+  3. LLB       - image4_validate_property_callback → return 0 + boot-args + SSV/rootfs bypass
+  4. TXM       - trustcache bypass (allow unsigned binaries)
+  5. kernel    - SSV (Signed System Volume) bypass (prevent boot panics)
+  6. AVPBooter - image4_validate_property_callback → return 0 (VM bootrom sig bypass)
 
 Based on cloudOS 23B85 (PCC) + iOS 26.1 23B85 (iPhone17,3) mixed firmware.
 Offsets verified against image4_validate_property_callback found at:
   iBSS VA 0x70075D10 (file 0x9D10), LLB VA 0x700760D8 (file 0xA0D8)
+
+AVPBooter is a raw binary (no IM4P container) copied from the system
+Virtualization.framework and patched to bin/AVPBooter.vresearch1.bin.
+
+NOTE: SIP/AMFI must be disabled on the host Mac because super-tart uses
+  private Virtualization.framework APIs (_VZMacHardwareModelDescriptor,
+  _setROMURL, _VZSEPCoprocessorConfiguration, _VZUSBTouchScreenConfiguration,
+  etc.) which require the restricted com.apple.private.virtualization entitlement.
 
 Usage:
   python3 patch_fw.py [--firmware-dir PATH] [--dry-run] [--verify-only]
@@ -27,11 +36,19 @@ import sys
 from pathlib import Path
 
 # =============================================================================
-# Tool paths
+# Paths
 # =============================================================================
+SCRIPT_DIR = Path(__file__).parent.resolve()
+REPO_ROOT = SCRIPT_DIR.parent
+BIN_DIR = REPO_ROOT / "bin"
+
 PYIMG4 = os.environ.get("PYIMG4", shutil.which("pyimg4") or
          os.path.expanduser("~/Library/Python/3.9/bin/pyimg4"))
-IMG4TOOL = os.environ.get("IMG4TOOL", shutil.which("img4tool") or "/usr/local/bin/img4tool")
+IMG4TOOL = os.environ.get("IMG4TOOL", str(BIN_DIR / "img4tool"))
+
+# AVPBooter system source path
+AVPBOOTER_SRC = Path("/System/Library/Frameworks/Virtualization.framework"
+                     "/Resources/AVPBooter.vresearch1.bin")
 
 # =============================================================================
 # ARM64 instruction encodings
@@ -95,6 +112,11 @@ KERNEL_PATCHES = [
     (0x0F6D960, NOP, "_bsd_init: NOP (prevent 'rootvp not authenticated' panic)"),
 ]
 
+AVPBOOTER_PATCHES = [
+    # image4_validate_property_callback: MOV X0, X20 → MOV X0, #0 (bypass signature verification)
+    (0x2C20, MOV_X0_0, "image4_validate_property_callback: MOV X0, #0 (was MOV X0, X20)"),
+]
+
 # =============================================================================
 # Firmware file paths (relative to firmware restore directory)
 # =============================================================================
@@ -133,6 +155,12 @@ FIRMWARE_FILES = {
         "lzfse": True,
         "preserve_payp": True,
     },
+    "AVPBooter": {
+        "source": str(AVPBOOTER_SRC),
+        "output": str(BIN_DIR / "AVPBooter.vresearch1.bin"),
+        "patches": AVPBOOTER_PATCHES,
+        "raw": True,  # no IM4P container — patch raw binary directly
+    },
 }
 
 # =============================================================================
@@ -170,6 +198,9 @@ EXPECTED_ORIGINALS = {
         0x2476964: 0x37281048,  # TBNZ
         0x23CFDE4: 0x37700160,  # TBNZ
         0x0F6D960: 0x35001340,  # CBNZ
+    },
+    "AVPBooter": {
+        0x2C20: 0xAA1403E0,  # MOV X0, X20
     },
 }
 
@@ -286,6 +317,52 @@ def preserve_payp(original_im4p_path, new_im4p_path):
     return True
 
 
+def process_raw_component(name, config, dry_run=False, verify_only=False):
+    """Process a raw binary component (no IM4P container). Used for AVPBooter."""
+    print(f"\n{'='*60}")
+    print(f"[{name}]")
+    print(f"{'='*60}")
+
+    src_path = config["source"]
+    out_path = config["output"]
+    patches = config["patches"]
+
+    # Check source exists
+    if not os.path.exists(src_path):
+        print(f"  ERROR: {src_path} not found!")
+        return False
+
+    # Read source binary
+    raw_data = Path(src_path).read_bytes()
+    print(f"  Source: {src_path}")
+    print(f"  Binary: {len(raw_data)} bytes, SHA256: {sha256(raw_data)[:16]}...")
+
+    # Verify original values
+    print(f"  Verifying original instruction values:")
+    if not verify_offsets(raw_data, name):
+        print(f"  WARNING: Some offsets don't match expected values!")
+        print(f"  This binary may be a different build. Proceed with caution.")
+
+    if verify_only:
+        return True
+
+    # Apply patches
+    print(f"  Applying patches:")
+    patched_data = apply_patches(raw_data, patches, name)
+    print(f"  Patched SHA256: {sha256(patched_data)[:16]}...")
+
+    if dry_run:
+        print(f"  DRY RUN: would write patched binary to {out_path}")
+        return True
+
+    # Write patched binary
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    Path(out_path).write_bytes(patched_data)
+    print(f"  Output: {out_path} ({len(patched_data)} bytes)")
+    print(f"  [{name}] DONE")
+    return True
+
+
 def process_component(name, config, fw_dir, tmp_dir, dry_run=False, verify_only=False):
     """Process a single firmware component: extract, verify, patch, repack."""
     print(f"\n{'='*60}")
@@ -381,11 +458,12 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Components patched:
-  iBSS   - Signature verification bypass (image4_validate_property_callback → return 0)
-  iBEC   - Signature bypass + boot-args (serial=3 -v debug=0x2014e)
-  LLB    - Signature bypass + boot-args + SSV/rootfs bypass
-  TXM    - Trustcache bypass (allow unsigned binaries)
-  kernel - SSV bypass (prevent boot panics on unsigned root volume)
+  iBSS      - Signature verification bypass (image4_validate_property_callback → return 0)
+  iBEC      - Signature bypass + boot-args (serial=3 -v debug=0x2014e)
+  LLB       - Signature bypass + boot-args + SSV/rootfs bypass
+  TXM       - Trustcache bypass (allow unsigned binaries)
+  kernel    - SSV bypass (prevent boot panics on unsigned root volume)
+  AVPBooter - VM bootrom signature bypass (raw binary, no IM4P)
 
 All offsets are for cloudOS/iOS 23B85 build.
 """)
@@ -402,43 +480,48 @@ All offsets are for cloudOS/iOS 23B85 build.
                         help="Components to patch (default: all)")
     args = parser.parse_args()
 
-    # Find firmware directory
-    if args.firmware_dir:
-        fw_dir = args.firmware_dir
-    else:
-        # Auto-detect relative to script location
-        script_dir = Path(__file__).parent.resolve()
-        candidates = [
-            script_dir.parent / "firmwares" / "firmware_patched" / "iPhone17,3_26.1_23B85_Restore",
-            Path.cwd() / "firmwares" / "firmware_patched" / "iPhone17,3_26.1_23B85_Restore",
-            Path.cwd() / "iPhone17,3_26.1_23B85_Restore",
-        ]
-        fw_dir = None
-        for c in candidates:
-            if c.exists():
-                fw_dir = str(c)
-                break
-        if not fw_dir:
-            print("ERROR: Could not find firmware directory. Use --firmware-dir to specify.")
-            sys.exit(1)
-
-    print(f"Firmware directory: {fw_dir}")
-
-    # Check tools
-    for tool_name, tool_path in [("pyimg4", PYIMG4), ("img4tool", IMG4TOOL)]:
-        if not tool_path or not os.path.exists(tool_path):
-            print(f"ERROR: {tool_name} not found at {tool_path}")
-            print(f"Set {tool_name.upper()} environment variable or install it.")
-            sys.exit(1)
-        print(f"  {tool_name}: {tool_path}")
-
-    # Create temp directory for raw binaries
-    tmp_dir = os.path.join(os.path.dirname(fw_dir), "patch_tmp")
-    os.makedirs(tmp_dir, exist_ok=True)
-    print(f"  Temp dir: {tmp_dir}")
-
     # Determine which components to patch
     components = list(FIRMWARE_FILES.keys()) if "all" in args.component else args.component
+
+    # Separate raw components (AVPBooter) from IM4P components
+    raw_components = [c for c in components if FIRMWARE_FILES[c].get("raw")]
+    im4p_components = [c for c in components if not FIRMWARE_FILES[c].get("raw")]
+
+    # Find firmware directory (only needed for IM4P components)
+    fw_dir = None
+    tmp_dir = None
+    if im4p_components:
+        if args.firmware_dir:
+            fw_dir = args.firmware_dir
+        else:
+            # Auto-detect relative to script location
+            candidates = [
+                REPO_ROOT / "firmwares" / "firmware_patched" / "iPhone17,3_26.1_23B85_Restore",
+                Path.cwd() / "firmwares" / "firmware_patched" / "iPhone17,3_26.1_23B85_Restore",
+                Path.cwd() / "iPhone17,3_26.1_23B85_Restore",
+            ]
+            for c in candidates:
+                if c.exists():
+                    fw_dir = str(c)
+                    break
+            if not fw_dir:
+                print("ERROR: Could not find firmware directory. Use --firmware-dir to specify.")
+                sys.exit(1)
+
+        print(f"Firmware directory: {fw_dir}")
+
+        # Check tools
+        for tool_name, tool_path in [("pyimg4", PYIMG4), ("img4tool", IMG4TOOL)]:
+            if not tool_path or not os.path.exists(tool_path):
+                print(f"ERROR: {tool_name} not found at {tool_path}")
+                print(f"Set {tool_name.upper()} environment variable or install it.")
+                sys.exit(1)
+            print(f"  {tool_name}: {tool_path}")
+
+        # Create temp directory for raw binaries
+        tmp_dir = os.path.join(os.path.dirname(fw_dir), "patch_tmp")
+        os.makedirs(tmp_dir, exist_ok=True)
+        print(f"  Temp dir: {tmp_dir}")
 
     if args.dry_run:
         print("\n*** DRY RUN - no files will be modified ***")
@@ -447,11 +530,18 @@ All offsets are for cloudOS/iOS 23B85 build.
 
     # Process each component
     results = {}
-    for name in components:
+    for name in im4p_components:
         config = FIRMWARE_FILES[name]
         ok = process_component(name, config, fw_dir, tmp_dir,
                                dry_run=args.dry_run,
                                verify_only=args.verify_only)
+        results[name] = ok
+
+    for name in raw_components:
+        config = FIRMWARE_FILES[name]
+        ok = process_raw_component(name, config,
+                                   dry_run=args.dry_run,
+                                   verify_only=args.verify_only)
         results[name] = ok
 
     # Summary
@@ -460,13 +550,16 @@ All offsets are for cloudOS/iOS 23B85 build.
     print(f"{'='*60}")
     for name, ok in results.items():
         status = "OK" if ok else "FAILED"
-        print(f"  {name:8s}: {status}")
+        print(f"  {name:10s}: {status}")
 
     if all(results.values()):
         print("\nAll components processed successfully.")
         if not args.dry_run and not args.verify_only:
-            print(f"Patched firmware is in: {fw_dir}")
-            print(f"Backups saved with .bak extension.")
+            if fw_dir:
+                print(f"Patched firmware is in: {fw_dir}")
+                print(f"Backups saved with .bak extension.")
+            for name in raw_components:
+                print(f"  {name}: {FIRMWARE_FILES[name]['output']}")
     else:
         print("\nSome components failed. Check output above.")
         sys.exit(1)
