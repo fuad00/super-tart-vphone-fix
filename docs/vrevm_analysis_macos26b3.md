@@ -99,15 +99,80 @@ The boardID from setBoardID is passed through to the model but does NOT affect i
 - The vphone firmware (iBSS/iBEC/LLB/kernel) may check boardID and refuse to boot with boardID=0x20
 - Setting boardID=0x90 explicitly with PV=2 makes `isSupported` still return true, but whether the firmware accepts this combination is untested
 
-## Possible Workaround Strategies
+## Workaround: ObjC Runtime Swizzle of isSupported
 
-1. **PV=2 + boardID=0x90**: Set platformVersion=2 for isSupported, then override boardID to 0x90. The framework allows this but the internal chipID/device tree may differ.
+Patching the framework binary is impractical (dyld shared cache). Instead, use ObjC runtime `method_setImplementation` to hook `-[VZMacHardwareModel isSupported]` before creating the hardware model:
 
-2. **Patch isSupported**: Modify the validity byte in memory after `_hardwareModelWithDescriptor:` returns (set state+0x24 = 1). This preserves the correct PV=3 configuration.
+```swift
+import ObjectiveC
 
-3. **Patch the framework**: NOP the validity check in `isSupported` (patch `cmp w8, #0x1; b.ne` to `nop; nop`).
+let cls: AnyClass = VZMacHardwareModel.self
+let sel = NSSelectorFromString("isSupported")
+let method = class_getInstanceMethod(cls, sel)!
+let alwaysTrue: @convention(block) (AnyObject) -> Bool = { _ in true }
+method_setImplementation(method, imp_implementationWithBlock(alwaysTrue))
+```
 
-4. **Use an older Virtualization.framework**: Run on macOS 26 beta 2 or earlier where PV=3 is still supported.
+Then use the real vresearch101 config: `setPlatformVersion(3)`, `setBoardID(0x90)`, `setISA(2)`.
+
+### Swizzle Test Results
+
+| Config | isSupported | validate() | VZVirtualMachine init | start() | Notes |
+|--------|-------------|------------|----------------------|---------|-------|
+| PV=3 + boardID=0x90 (no swizzle) | **false** | — | — | — | Apple disabled PV=3 |
+| PV=3 + boardID=0x90 + swizzle | **true** | **PASS** | **PASS** | see below | Swizzle works |
+| PV=2 + boardID=0x90 (no swizzle) | **true** | **PASS** | **PASS** | see below | PV=2 natively supported |
+
+### VM Start Results (with SEP coprocessor)
+
+| Config | SEP Config | start() Result |
+|--------|-----------|----------------|
+| PV=3 + swizzle + SEP full (ROM+debug) | `_VZSEPCoprocessorConfiguration` + `romBinaryURL` + `debugStub` | **FAIL**: "The coprocessor configuration is invalid." |
+| PV=3 + swizzle + SEP minimal (storage only) | `_VZSEPCoprocessorConfiguration` (no ROM, no debug) | **FAIL**: same error |
+| PV=2 + SEP full | same as above | **FAIL**: same error |
+| PV=3 + swizzle + **no SEP** (`SKIP_SEP=1`) | no `_setCoprocessors` call | **PASS** — VM starts and enters DFU |
+| PV=2 + **no SEP** | no `_setCoprocessors` call | **PASS** — VM starts and enters DFU |
+
+**Key finding:** The SEP coprocessor configuration is rejected by the hypervisor at `virtualMachine.start(options:)` regardless of platform version. This is a **separate** restriction from the `isSupported` validity byte — Apple also blocked `_VZSEPCoprocessorConfiguration` at the hypervisor/XPC level in macOS 26.3.
+
+The error occurs in the `start()` call path (after `validate()` passes and `VZVirtualMachine` init succeeds), meaning the rejection happens inside the hypervisor daemon (`com.apple.Virtualization.VirtualMachine` XPC service), not in the framework's ObjC layer.
+
+### Confirmed Boot Sequence (without SEP)
+
+```
+[swizzle] OK: -[VZMacHardwareModel isSupported] now always returns true
+[vzHardwareModel] setPlatformVersion=3, setBoardID=0x90, setISA=2
+[vzHardwareModel] plist: {
+    DataRepresentationVersion = 1;
+    ISA = 2;
+    MinimumSupportedOS = (15, 0, 0);
+    PlatformVersion = 3;
+}
+[vzHardwareModel] isSupported = true (after swizzle)
+[craftConfig] ECID: 0x1de1518ecffe2725
+[craftConfig] serialNumber: AAAAAA1337
+[craftConfig] productionMode: true
+[craftConfig] ========== CONFIGURATION VALID ==========
+[VM.init] VZVirtualMachine created successfully
+[VM.start] calling virtualMachine.start(options:)...
+→ VM enters DFU mode, ready for irecovery firmware load
+```
+
+## Remaining Blockers
+
+1. **SEP coprocessor rejected at hypervisor level** — `_VZSEPCoprocessorConfiguration` fails during `start()` for both PV=2 and PV=3. Without SEP, the vphone firmware bootchain will fail at stages that require SEP (e.g., secure boot, data protection). Need to investigate whether the hypervisor XPC service has its own `isSupported`-like check that can be bypassed, or whether this requires a different approach entirely.
+
+2. **`_setPanicAction:` and `_setFatalErrorAction:` missing** — These `VZMacOSVirtualMachineStartOptions` methods are not recognized on macOS 26.3 (warnings in output). The APIs may have been renamed or removed.
+
+## Possible Next Steps
+
+1. **Boot without SEP** — Load the patched firmware via irecovery into the DFU VM to see how far the bootchain gets without SEP. iBSS/iBEC may still load; the kernel will likely panic when SEP is unavailable.
+
+2. **Investigate hypervisor SEP validation** — The XPC service at `/System/Library/Frameworks/Virtualization.framework/Versions/A/XPCServices/com.apple.Virtualization.VirtualMachine.xpc` likely has additional checks. May need to reverse-engineer the XPC protocol or find a way to hook the daemon.
+
+3. **Use macOS 26 beta 2** — Downgrade to a version where both PV=3 and SEP coprocessor are supported.
+
+4. **Try `_coprocessorStorageFileDescriptor`** — `VZVirtualMachineConfiguration` has a `_coprocessorStorageFileDescriptor` property that may be an alternative way to configure SEP storage without the full `_VZSEPCoprocessorConfiguration`.
 
 ---
 
