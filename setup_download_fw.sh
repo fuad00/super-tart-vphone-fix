@@ -13,8 +13,9 @@
 # Prerequisites:
 #   - curl
 #   - unzip
-#   - pccvre (from security-pcc/srd_tools, for PCC firmware download)
-#     OR manually place the PCC IPSW at firmwares/pcc_os_23B85.ipsw
+#
+# NOTE: This script downloads firmware directly from Apple's CDN.
+#   No Apple binary files are stored in this repository — only URLs.
 #
 # Usage:
 #   bash setup_download_fw.sh
@@ -65,21 +66,20 @@ download_iphone_ipsw() {
     ok "downloaded: ${FW_DIR}/${IPHONE_IPSW_NAME}"
 }
 
-# ── check PCC firmware ───────────────────────────────────────────────────────
+# ── download PCC firmware ─────────────────────────────────────────────────────
 
-check_pcc_ipsw() {
-    log "checking PCC cloudOS 23B85 firmware..."
+download_pcc_ipsw() {
+    log "downloading PCC cloudOS 23B85 IPSW..."
 
     if [ -f "${FW_DIR}/${PCC_IPSW_NAME}" ]; then
-        ok "found: ${FW_DIR}/${PCC_IPSW_NAME}"
+        ok "already exists: ${FW_DIR}/${PCC_IPSW_NAME}"
         return 0
     fi
 
-    warn "PCC firmware not found at: ${FW_DIR}/${PCC_IPSW_NAME}"
-    echo ""
-    echo "${PCC_RELEASE_NOTE}"
-    echo ""
-    die "place PCC IPSW at ${FW_DIR}/${PCC_IPSW_NAME} and re-run this script."
+    mkdir -p "${FW_DIR}"
+    curl -L -o "${FW_DIR}/${PCC_IPSW_NAME}.part" "${PCC_IPSW_URL}"
+    mv "${FW_DIR}/${PCC_IPSW_NAME}.part" "${FW_DIR}/${PCC_IPSW_NAME}"
+    ok "downloaded: ${FW_DIR}/${PCC_IPSW_NAME}"
 }
 
 # ── extract IPSWs ────────────────────────────────────────────────────────────
@@ -183,7 +183,7 @@ main() {
     echo ""
 
     download_iphone_ipsw
-    check_pcc_ipsw
+    download_pcc_ipsw
     extract_iphone_ipsw
     extract_pcc_ipsw
     mix_firmware
