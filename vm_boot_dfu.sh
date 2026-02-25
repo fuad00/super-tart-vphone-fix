@@ -46,9 +46,10 @@ echo "VM name : ${VM_NAME}"
 echo "TART    : ${TART_BIN}"
 echo "TART_HOME: ${TART_HOME}"
 echo "VPHONE_MODE: ${VPHONE_MODE}"
+echo "SKIP_SEP : ${SKIP_SEP}"
 
 echo ""
-echo "Command: VPHONE_MODE=${VPHONE_MODE} TART_HOME=\"${TART_HOME}\" ${TART_BIN} run ${VM_NAME} --dfu $*"
+echo "Command: SKIP_SEP=${SKIP_SEP} VPHONE_MODE=${VPHONE_MODE} TART_HOME=\"${TART_HOME}\" ${TART_BIN} run ${VM_NAME} --dfu $*"
 
 echo ""
-exec env TART_HOME="${TART_HOME}" VPHONE_MODE="${VPHONE_MODE}" "${TART_BIN}" run "${VM_NAME}" --dfu "$@"
+exec env TART_HOME="${TART_HOME}" VPHONE_MODE="${VPHONE_MODE}" SKIP_SEP="${SKIP_SEP}" "${TART_BIN}" run "${VM_NAME}" --dfu "$@"
