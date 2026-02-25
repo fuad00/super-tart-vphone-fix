@@ -269,11 +269,16 @@ insert_helpers = needle_class + textwrap.dedent("""\
 
   // vzHardwareModel derives the VZMacHardwareModel config specific to the "platform type"
   // of the VM (currently only vresearch101 supported)
+  // macOS 26+: platformVersion=2 + ISA=2 + OS version hints required for isSupported=true
   static private func vzHardwareModel_VRESEARCH101() throws -> VZMacHardwareModel {
     let hw_descriptor = Dynamic._VZMacHardwareModelDescriptor()
-    hw_descriptor.setPlatformVersion(3) // .appleInternal4 = 3
-    hw_descriptor.setBoardID(0x90)
+    hw_descriptor.setPlatformVersion(2)
     hw_descriptor.setISA(2)
+    // Set guest/host OS versions (required on macOS 26+)
+    let guestOS = OperatingSystemVersion(majorVersion: 26, minorVersion: 1, patchVersion: 0)
+    hw_descriptor.setInitialGuestMacOSVersion(guestOS)
+    let hostOS = ProcessInfo.processInfo.operatingSystemVersion
+    hw_descriptor.setMinimumSupportedHostOSVersion(hostOS)
 
     let hw_model_dyn = Dynamic.VZMacHardwareModel._hardwareModel(withDescriptor: hw_descriptor.asObject)
     guard let hw_model = hw_model_dyn.asObject as? VZMacHardwareModel else {
