@@ -211,6 +211,22 @@ build_super_tart() {
     ok "tart -> ${BIN_DIR}/tart"
 }
 
+install_homebrew_tools() {
+    log "installing homebrew tools to bin/..."
+    local tools=(ldid sshpass gtar iproxy)
+    for tool in "${tools[@]}"; do
+        local src
+        src="$(command -v "$tool" 2>/dev/null || true)"
+        if [ -z "$src" ]; then
+            err "$tool not found — install with: brew install $tool"
+            continue
+        fi
+        cp -f "$src" "${BIN_DIR}/$tool"
+        chmod +x "${BIN_DIR}/$tool"
+        ok "$tool -> ${BIN_DIR}/$tool"
+    done
+}
+
 # ── main ─────────────────────────────────────────────────────────────────────
 
 main() {
@@ -230,11 +246,14 @@ main() {
     build_libirecovery        # depends on libimobiledevice-glue
     build_idevicerestore      # depends on libirecovery + many libs
     build_super_tart          # Swift Package Manager
+    install_homebrew_tools    # ldid, sshpass, gtar, iproxy
 
     echo ""
     log "all tools built successfully:"
     ls -lh "${BIN_DIR}"/img4 "${BIN_DIR}"/img4tool "${BIN_DIR}"/trustcache \
            "${BIN_DIR}"/irecovery "${BIN_DIR}"/idevicerestore "${BIN_DIR}"/tart \
+           "${BIN_DIR}"/ldid "${BIN_DIR}"/sshpass "${BIN_DIR}"/gtar \
+           "${BIN_DIR}"/iproxy \
         2>/dev/null || true
     echo ""
     log "run 'source setup_env.sh' to activate the environment"
