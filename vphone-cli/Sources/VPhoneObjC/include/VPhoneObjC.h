@@ -28,4 +28,17 @@ void VPhoneSetCoprocessors(VZVirtualMachineConfiguration *config, NSArray *copro
 /// Set _setProductionModeEnabled:NO on VZMacPlatformConfiguration.
 void VPhoneDisableProductionMode(VZMacPlatformConfiguration *platform);
 
+/// Create a _VZSEPCoprocessorConfiguration with the given storage URL.
+/// Returns the config object, or nil on failure.
+id _Nullable VPhoneCreateSEPCoprocessorConfig(NSURL *storageURL);
+
+/// Set romBinaryURL on a _VZSEPCoprocessorConfiguration.
+void VPhoneSetSEPRomBinaryURL(id sepConfig, NSURL *romURL);
+
+/// Configure SEP coprocessor on the VM config.
+/// Creates storage at sepStorageURL, optionally sets sepRomURL, and calls _setCoprocessors:.
+void VPhoneConfigureSEP(VZVirtualMachineConfiguration *config,
+                        NSURL *sepStorageURL,
+                        NSURL *_Nullable sepRomURL);
+
 NS_ASSUME_NONNULL_END
